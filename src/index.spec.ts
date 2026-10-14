@@ -33,6 +33,26 @@ describe("greet", () => {
   it("supports a custom prefix with the default name", () => {
     expect(greet(undefined, { prefix: "Hi" })).toBe("Hi, world!");
   });
+
+  it.each([
+    [".", "Hello, CI."],
+    ["", "Hello, CI"],
+    [" 👋", "Hello, CI 👋"],
+  ])("appends the suffix %j without changing it", (suffix, expected) => {
+    expect(greet("CI", { suffix })).toBe(expected);
+  });
+
+  it.each([undefined, "", " \t\n"])("uses a custom fallback for the name %j", (name) => {
+    expect(greet(name, { fallbackName: "  team  " })).toBe("Hello, team!");
+  });
+
+  it.each(["", " \t\n"])("uses world when the fallback name is blank %j", (fallbackName) => {
+    expect(greet(" ", { fallbackName })).toBe("Hello, world!");
+  });
+
+  it("prefers the provided name over the fallback", () => {
+    expect(greet(" CI ", { fallbackName: "team" })).toBe("Hello, CI!");
+  });
 });
 
 describe("greetMany", () => {
@@ -45,6 +65,17 @@ describe("greetMany", () => {
 
   it("shares a custom prefix and uses the default for blank names", () => {
     expect(greetMany(["CI", "  "], { prefix: "Hi" })).toEqual(["Hi, CI!", "Hi, world!"]);
+  });
+
+  it("shares a custom suffix with all greetings", () => {
+    expect(greetMany(["CI", " "], { prefix: "Hi", suffix: "." })).toEqual(["Hi, CI.", "Hi, world."]);
+  });
+
+  it("shares a custom fallback for blank names", () => {
+    expect(greetMany(["CI", " "], { prefix: "Hi", suffix: ".", fallbackName: "team" })).toEqual([
+      "Hi, CI.",
+      "Hi, team.",
+    ]);
   });
 
   it("returns an empty list when there are no names", () => {

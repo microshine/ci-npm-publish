@@ -2,11 +2,18 @@
 export interface GreetingOptions {
   /** Greeting prefix; omitted or blank values use "Hello". */
   prefix?: string;
+  /** Text appended after the name, used as-is; defaults to "!". */
+  suffix?: string;
+  /** Name used for omitted or blank input; omitted or blank values use "world". */
+  fallbackName?: string;
 }
 
-/** Return a greeting; omitted or blank names use "world". */
-export function greet(name = "world", { prefix = "Hello" }: GreetingOptions = {}): string {
-  return `${prefix.trim() || "Hello"}, ${name.trim() || "world"}!`;
+/** Return a greeting; omitted or blank names use the configured fallback name. */
+export function greet(
+  name = "",
+  { prefix = "Hello", suffix = "!", fallbackName = "world" }: GreetingOptions = {},
+): string {
+  return `${prefix.trim() || "Hello"}, ${name.trim() || fallbackName.trim() || "world"}${suffix}`;
 }
 
 /** Greet each name in order without modifying the input list. */
