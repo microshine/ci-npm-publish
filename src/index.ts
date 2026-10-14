@@ -2,11 +2,13 @@
 export interface GreetingOptions {
   /** Greeting prefix; omitted or blank values use "Hello". */
   prefix?: string;
+  /** Text appended after the name, used as-is; defaults to "!". */
+  suffix?: string;
 }
 
 /** Return a greeting; omitted or blank names use "world". */
-export function greet(name = "world", { prefix = "Hello" }: GreetingOptions = {}): string {
-  return `${prefix.trim() || "Hello"}, ${name.trim() || "world"}!`;
+export function greet(name = "world", { prefix = "Hello", suffix = "!" }: GreetingOptions = {}): string {
+  return `${prefix.trim() || "Hello"}, ${name.trim() || "world"}${suffix}`;
 }
 
 /** Greet each name in order without modifying the input list. */

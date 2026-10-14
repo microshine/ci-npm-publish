@@ -33,6 +33,14 @@ describe("greet", () => {
   it("supports a custom prefix with the default name", () => {
     expect(greet(undefined, { prefix: "Hi" })).toBe("Hi, world!");
   });
+
+  it.each([
+    [".", "Hello, CI."],
+    ["", "Hello, CI"],
+    [" 👋", "Hello, CI 👋"],
+  ])("appends the suffix %j without changing it", (suffix, expected) => {
+    expect(greet("CI", { suffix })).toBe(expected);
+  });
 });
 
 describe("greetMany", () => {
@@ -45,6 +53,10 @@ describe("greetMany", () => {
 
   it("shares a custom prefix and uses the default for blank names", () => {
     expect(greetMany(["CI", "  "], { prefix: "Hi" })).toEqual(["Hi, CI!", "Hi, world!"]);
+  });
+
+  it("shares a custom suffix with all greetings", () => {
+    expect(greetMany(["CI", " "], { prefix: "Hi", suffix: "." })).toEqual(["Hi, CI.", "Hi, world."]);
   });
 
   it("returns an empty list when there are no names", () => {

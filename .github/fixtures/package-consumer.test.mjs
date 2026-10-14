@@ -48,4 +48,11 @@ for (const [format, api] of [
     assert.deepEqual(api.greetMany(["CI"]), ["Hello, CI!"]);
     assert.deepEqual(api.greetMany([]), []);
   });
+
+  test(`${format}: greeting helpers support custom and empty suffixes`, () => {
+    assert.equal(api.greet("CI", { suffix: "." }), "Hello, CI.");
+    assert.equal(api.greet("CI", { suffix: "" }), "Hello, CI");
+    assert.equal(api.greet("CI", { suffix: " 👋" }), "Hello, CI 👋");
+    assert.deepEqual(api.greetMany(["CI", " "], { prefix: "Hi", suffix: "." }), ["Hi, CI.", "Hi, world."]);
+  });
 }
