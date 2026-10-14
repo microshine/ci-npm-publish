@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { greet } from "./index";
+import { greet, greetMany } from "./index";
 
 describe("greet", () => {
   it("greets the world by default", () => {
@@ -32,5 +32,22 @@ describe("greet", () => {
 
   it("supports a custom prefix with the default name", () => {
     expect(greet(undefined, { prefix: "Hi" })).toBe("Hi, world!");
+  });
+});
+
+describe("greetMany", () => {
+  it("greets names in order without modifying the input list", () => {
+    const names = Object.freeze([" microshine ", "CI"]);
+
+    expect(greetMany(names)).toEqual(["Hello, microshine!", "Hello, CI!"]);
+    expect(names).toEqual([" microshine ", "CI"]);
+  });
+
+  it("shares a custom prefix and uses the default for blank names", () => {
+    expect(greetMany(["CI", "  "], { prefix: "Hi" })).toEqual(["Hi, CI!", "Hi, world!"]);
+  });
+
+  it("returns an empty list when there are no names", () => {
+    expect(greetMany([])).toEqual([]);
   });
 });
