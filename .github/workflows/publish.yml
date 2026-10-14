@@ -53,6 +53,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      pull-requests: read
     env:
       VERSION: ${{ needs.check.outputs.version }}
     steps:
@@ -64,20 +65,15 @@ jobs:
         with:
           registry-url: https://npm.pkg.github.com
 
-      - name: Extract release notes
+      - name: Read release notes from the merged release pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          awk -v version="$VERSION" '
-            /^##? \[?[0-9]+\.[0-9]+\.[0-9]+/ {
-              if (found) exit
-              if (index($0, "[" version "]") || index($0, " " version " ")) { found = 1; next }
-            }
-            found { print }
-          ' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
-
-          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/release-notes.md"; then
-            echo "::error::No release notes found in CHANGELOG.md for $VERSION"
-            exit 1
-          fi
+          gh api -H "Accept: application/vnd.github+json" \
+            "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls?per_page=100" \
+            > "$RUNNER_TEMP/release-prs.json"
+          node .github/scripts/release-notes.mjs extract \
+            "$RUNNER_TEMP/release-prs.json" "$RUNNER_TEMP/release-notes.md"
 
       - name: Publish to GitHub Packages
         env:

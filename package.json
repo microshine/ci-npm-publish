@@ -32,7 +32,7 @@
     "lint:fix": "oxlint --fix",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "changelog": "conventional-changelog -p angular -i CHANGELOG.md"
+    "changelog": "conventional-changelog -p angular --stdout"
   },
   "author": "microshine",
   "license": "MIT",
