@@ -19,12 +19,21 @@ import { greet, greetMany } from "@microshine/ci-npm-publish";
 greet(); // "Hello, world!"
 greet("microshine"); // "Hello, microshine!"
 greet("CI", { prefix: "Hi" }); // "Hi, CI!"
+greet("CI", { suffix: "." }); // "Hello, CI."
+greet("CI", { suffix: "" }); // "Hello, CI"
+greet(undefined, { fallbackName: "team" }); // "Hello, team!"
 greetMany(["microshine", "CI"]); // ["Hello, microshine!", "Hello, CI!"]
 greetMany(["CI", " "], { prefix: "Hi" }); // ["Hi, CI!", "Hi, world!"]
+greetMany(["CI", " "], { prefix: "Hi", suffix: ".", fallbackName: "team" });
+// ["Hi, CI.", "Hi, team."]
 ```
 
-Имена и префикс очищаются от пробелов по краям. Пустое имя заменяется на `world`, пустой префикс — на `Hello`.
-`greetMany` сохраняет порядок и не изменяет исходный список; пустой список возвращает `[]`.
+Имена, префикс и `fallbackName` очищаются от пробелов по краям. Отсутствующее или пустое имя заменяется
+на `fallbackName` (по умолчанию `world`); пустой `fallbackName` также заменяется на `world`.
+Пустой префикс заменяется на `Hello`. `suffix` добавляется после имени без изменений: по умолчанию `!`,
+пустая строка убирает знак в конце, а пробелы сохраняются — например, `suffix: " 👋"`.
+`greetMany` применяет одни и те же настройки ко всем именам, сохраняет порядок и не изменяет исходный список;
+пустой список возвращает `[]`.
 
 ## Локальная разработка
 
