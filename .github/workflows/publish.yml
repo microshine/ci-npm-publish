@@ -1,0 +1,131 @@
+name: Publish
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - package.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  check:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Check for unreleased version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          # The GitHub Release is the last step; its absence also permits recovery of a partial publish.
+          STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/tags/v$VERSION")
+
+          case "$STATUS" in
+            200) echo "release=false" >> "$GITHUB_OUTPUT" ;;
+            404) echo "release=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::Unexpected HTTP $STATUS while checking release v$VERSION"; exit 1 ;;
+          esac
+
+  publish:
+    runs-on: ubuntu-24.04
+    needs: check
+    if: needs.check.outputs.release == 'true'
+    permissions:
+      contents: write
+      packages: write
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Verify
+        uses: ./.github/actions/verify
+        with:
+          registry-url: https://npm.pkg.github.com
+
+      - name: Extract release notes
+        run: |
+          awk -v version="$VERSION" '
+            /^##? \[?[0-9]+\.[0-9]+\.[0-9]+/ {
+              if (found) exit
+              if (index($0, "[" version "]") || index($0, " " version " ")) { found = 1; next }
+            }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+
+          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/release-notes.md"; then
+            echo "::error::No release notes found in CHANGELOG.md for $VERSION"
+            exit 1
+          fi
+
+      - name: Publish to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+
+          if npm view "$NAME@$VERSION" version --json --registry=https://npm.pkg.github.com \
+            > "$RUNNER_TEMP/package-version.json" 2> "$RUNNER_TEMP/package-version.log"; then
+            echo "$NAME@$VERSION is already published"
+          elif jq -e '.error.code == "E404"' "$RUNNER_TEMP/package-version.json" > /dev/null; then
+            # Publish the verified build, without running prepack again.
+            npm publish --ignore-scripts --registry=https://npm.pkg.github.com
+          else
+            cat "$RUNNER_TEMP/package-version.log"
+            echo "::error::Cannot check the package version in GitHub Packages"
+            exit 1
+          fi
+
+      - name: Push tags
+        run: |
+          set +e
+          git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" > /dev/null
+          STATUS=$?
+          set -e
+
+          case "$STATUS" in
+            0)
+              git fetch --no-tags origin "refs/tags/v$VERSION:refs/tags/v$VERSION"
+              if [ "$(git rev-parse "v$VERSION^{commit}")" != "$(git rev-parse HEAD)" ]; then
+                echo "::error::Tag v$VERSION points to a different commit"
+                exit 1
+              fi
+              ;;
+            2)
+              git tag "v$VERSION"
+              git push origin "v$VERSION"
+              ;;
+            *)
+              echo "::error::git ls-remote failed with exit code $STATUS"
+              exit 1
+              ;;
+          esac
+
+          git tag -f "v${VERSION%%.*}" "v$VERSION^{commit}"
+          git push -f origin "v${VERSION%%.*}"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "v$VERSION" --verify-tag --title "v$VERSION" --notes-file "$RUNNER_TEMP/release-notes.md"

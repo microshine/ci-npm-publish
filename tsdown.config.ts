@@ -1,0 +1,13 @@
+import { defineConfig } from "tsdown";
+
+export default defineConfig({
+  entry: { index: "src/index.ts" },
+  format: ["esm"],
+  platform: "neutral",
+  dts: true,
+  clean: true,
+  fixedExtension: false,
+  exports: { legacy: true },
+  outDir: "build",
+  attw: { level: "error", profile: "esm-only" },
+});

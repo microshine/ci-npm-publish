@@ -1,0 +1,73 @@
+name: Version Bump
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump type
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: version-bump
+  cancel-in-progress: false
+
+jobs:
+  version-bump:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Bump version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          npm version "$BUMP" --no-git-tag-version
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Update changelog
+        run: npm run changelog
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          # RELEASE_TOKEN lets CI on the release PR run without manual workflow approval.
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+          base: main
+          branch: release/version-bump
+          add-paths: |
+            package.json
+            package-lock.json
+            CHANGELOG.md
+          commit-message: "chore(release): v${{ steps.version.outputs.version }}"
+          title: "chore(release): v${{ steps.version.outputs.version }}"
+          body: |
+            Version bump: `${{ inputs.bump }}` → `v${{ steps.version.outputs.version }}`
+
+            Review the version and `CHANGELOG.md` before merging. Fill in release notes if the generated section is empty.
+
+            After merging into `main`, **Publish** verifies the package, publishes to GitHub Packages, pushes the version and major tags, and creates a GitHub Release.
