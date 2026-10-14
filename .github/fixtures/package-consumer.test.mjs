@@ -55,4 +55,15 @@ for (const [format, api] of [
     assert.equal(api.greet("CI", { suffix: " 👋" }), "Hello, CI 👋");
     assert.deepEqual(api.greetMany(["CI", " "], { prefix: "Hi", suffix: "." }), ["Hi, CI.", "Hi, world."]);
   });
+
+  test(`${format}: greeting helpers support custom fallback names`, () => {
+    assert.equal(api.greet(undefined, { fallbackName: " team " }), "Hello, team!");
+    assert.equal(api.greet(" \t\n", { fallbackName: "team" }), "Hello, team!");
+    assert.equal(api.greet(" ", { fallbackName: " " }), "Hello, world!");
+    assert.equal(api.greet(" CI ", { fallbackName: "team" }), "Hello, CI!");
+    assert.deepEqual(api.greetMany(["CI", " "], { prefix: "Hi", suffix: ".", fallbackName: "team" }), [
+      "Hi, CI.",
+      "Hi, team.",
+    ]);
+  });
 }
