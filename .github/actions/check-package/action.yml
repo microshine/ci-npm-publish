@@ -1,0 +1,32 @@
+name: Check installed package
+description: Install and test the packed module in a fresh consumer project on one Node version
+
+inputs:
+  node-version:
+    description: Node version to test
+    required: true
+  tarball:
+    description: Absolute path to the verified package archive
+    required: true
+  integrity:
+    description: SHA-512 integrity from the pack step
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Setup consumer Node.js
+      id: node
+      uses: actions/setup-node@v7
+      with:
+        node-version: ${{ inputs.node-version }}
+        check-latest: true
+        package-manager-cache: false
+
+    - name: Test installed tarball
+      shell: bash
+      env:
+        PACKAGE_TARBALL: ${{ inputs.tarball }}
+        PACKAGE_INTEGRITY: ${{ inputs.integrity }}
+        EXPECTED_NODE_VERSION: ${{ steps.node.outputs.node-version }}
+      run: node .github/scripts/check-package.mjs "$PACKAGE_TARBALL" "$PACKAGE_INTEGRITY"

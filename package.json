@@ -32,6 +32,8 @@
     "lint:fix": "oxlint --fix",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
+    "package:pack": "node .github/scripts/pack-package.mjs",
+    "package:check": "node .github/scripts/check-package.mjs",
     "changelog": "conventional-changelog -p angular --stdout"
   },
   "author": "microshine",
