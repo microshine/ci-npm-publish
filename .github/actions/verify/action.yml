@@ -1,11 +1,19 @@
 name: Verify
-description: Install dependencies, lint, check formatting and types, build and test the package
+description: Build once, pack and test the installed archive on supported Node versions
 
 inputs:
   registry-url:
     description: Registry URL for setup-node (used when publishing)
     required: false
     default: ""
+
+outputs:
+  tarball:
+    description: Absolute path to the archive checked on all Node versions
+    value: ${{ steps.package.outputs.tarball }}
+  integrity:
+    description: SHA-512 integrity of the checked archive
+    value: ${{ steps.package.outputs.integrity }}
 
 runs:
   using: composite
@@ -45,3 +53,44 @@ runs:
     - name: Run tests with coverage
       shell: bash
       run: npm run coverage
+
+    - name: Pack verified build without rebuilding
+      id: package
+      shell: bash
+      run: npm run --silent package:pack
+
+    - name: Check installed package on Node 24.0.0 (minimum)
+      uses: ./.github/actions/check-package
+      with:
+        node-version: "24.0.0"
+        tarball: ${{ steps.package.outputs.tarball }}
+        integrity: ${{ steps.package.outputs.integrity }}
+
+    - name: Check installed package on latest Node 24
+      uses: ./.github/actions/check-package
+      with:
+        node-version: "24"
+        tarball: ${{ steps.package.outputs.tarball }}
+        integrity: ${{ steps.package.outputs.integrity }}
+
+    - name: Check installed package on latest Node 25
+      uses: ./.github/actions/check-package
+      with:
+        node-version: "25"
+        tarball: ${{ steps.package.outputs.tarball }}
+        integrity: ${{ steps.package.outputs.integrity }}
+
+    - name: Check installed package on latest Node 26
+      uses: ./.github/actions/check-package
+      with:
+        node-version: "26"
+        tarball: ${{ steps.package.outputs.tarball }}
+        integrity: ${{ steps.package.outputs.integrity }}
+
+    - name: Restore build and publish Node.js
+      uses: actions/setup-node@v7
+      with:
+        node-version: "24"
+        registry-url: ${{ inputs.registry-url }}
+        scope: "@microshine"
+        package-manager-cache: false

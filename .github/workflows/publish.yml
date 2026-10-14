@@ -61,6 +61,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Verify
+        id: verify
         uses: ./.github/actions/verify
         with:
           registry-url: https://npm.pkg.github.com
@@ -78,15 +79,27 @@ jobs:
       - name: Publish to GitHub Packages
         env:
           NODE_AUTH_TOKEN: ${{ github.token }}
+          PACKAGE_TARBALL: ${{ steps.verify.outputs.tarball }}
+          PACKAGE_INTEGRITY: ${{ steps.verify.outputs.integrity }}
         run: |
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { createHash } from "node:crypto";
+          import { readFileSync } from "node:fs";
+
+          const integrity = "sha512-" + createHash("sha512")
+            .update(readFileSync(process.env.PACKAGE_TARBALL)).digest("base64");
+          assert.equal(integrity, process.env.PACKAGE_INTEGRITY, "The checked tarball must not change before publishing");
+          NODE
+
           NAME=$(node -p "require('./package.json').name")
 
           if npm view "$NAME@$VERSION" version --json --registry=https://npm.pkg.github.com \
             > "$RUNNER_TEMP/package-version.json" 2> "$RUNNER_TEMP/package-version.log"; then
             echo "$NAME@$VERSION is already published"
           elif jq -e '.error.code == "E404"' "$RUNNER_TEMP/package-version.json" > /dev/null; then
-            # Publish the verified build, without running prepack again.
-            npm publish --ignore-scripts --registry=https://npm.pkg.github.com
+            # Publish the exact archive installed and tested above, without packing or rebuilding it.
+            npm publish "$PACKAGE_TARBALL" --ignore-scripts --registry=https://npm.pkg.github.com
           else
             cat "$RUNNER_TEMP/package-version.log"
             echo "::error::Cannot check the package version in GitHub Packages"

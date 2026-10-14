@@ -28,7 +28,7 @@ greetMany(["CI", " "], { prefix: "Hi" }); // ["Hi, CI!", "Hi, world!"]
 
 ## Локальная разработка
 
-Node.js 24 или новее; CI использует Node.js 24.
+Node.js 24 или новее. CI собирает пакет на Node.js 24 и проверяет установленный архив на нескольких версиях Node.
 
 ```bash
 npm ci
@@ -37,8 +37,14 @@ npm run format:check
 npm run typecheck
 npm run build
 npm run coverage
-npm pack --dry-run
+npm run --silent package:pack
+npm run package:check -- /absolute/path/from-pack-output.tgz
 ```
+
+`package:pack` выводит JSON с полями `tarball` (полный путь к `.tgz`) и `integrity` (SHA-512).
+Он упаковывает уже собранный `build/` с `--ignore-scripts`, поэтому не вызывает `prepack` и повторную сборку.
+Подставь путь из `tarball` в `package:check`; вторым аргументом можно передать `integrity`.
+Проверка создаёт временный проект-потребитель, устанавливает архив и запускает тесты через `node:test`.
 
 `npm run format` и `npm run lint:fix` исправляют оформление и замечания линтера.
 `src/index.spec.ts` содержит тесты модуля, `.github/scripts/release-notes.spec.mjs` — тесты подготовки
@@ -50,11 +56,31 @@ npm pack --dry-run
 
 | Workflow         | Когда запускается                                       | Что делает                                                                        |
 | ---------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| **Test**         | PR и push в `main`                                      | Установка, lint, форматирование, типы, сборка, тесты с покрытием                  |
+| **Test**         | PR и push в `main`                                      | Lint, типы, одна сборка, unit-тесты, упаковка и проверки установленного `.tgz`    |
 | **Version Bump** | Вручную из Actions, ветка `main`                        | `patch` / `minor` / `major`, PR `release/version-bump` с release notes в описании |
 | **Publish**      | Изменение `package.json` в `main` или вручную на `main` | Проверки, GitHub Packages, тег `vX.Y.Z`, обновление тега `vX`, GitHub Release     |
 
 Проверки вынесены в `.github/actions/verify`. Coveralls и npm Trusted Publisher для этого стенда не нужны.
+
+### Проверка пакета на заявленных версиях Node
+
+Диапазон `engines.node` — `>=24`. В одной job через `actions/setup-node` последовательно проверяются:
+
+- **24.0.0** — точная нижняя граница;
+- **24** — последняя версия ветки 24;
+- **25** — последняя версия ветки 25;
+- **26** — последняя версия ветки 26.
+
+На каждом запуске Test или Publish сборка и упаковка выполняются один раз. Во всех проверках используется
+один и тот же `.tgz`; его SHA-512 сверяется перед каждой установкой. Для каждой версии Node создаётся новый
+временный проект, в который устанавливается только пакет из архива с `--engine-strict` и без devDependencies
+репозитория. Проверяется загрузка через ESM `import` и CommonJS `require`, поведение `greet` / `greetMany`,
+версия пакета, `engines` и наличие деклараций TypeScript.
+
+После проверок восстанавливается Node 24. Publish дополнительно сверяет SHA-512 и передаёт проверенный архив
+в `npm publish <tarball> --ignore-scripts`; повторной сборки или упаковки перед публикацией нет.
+Ошибки совместимости блокируют публикацию. Версии задаются в `.github/actions/verify/action.yml`:
+при изменении `engines` или появлении новой major-версии Node обновляй этот список.
 
 ### Настройка GitHub один раз
 
