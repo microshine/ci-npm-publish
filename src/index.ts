@@ -10,15 +10,31 @@ export interface GreetingOptions {
   separator?: string;
 }
 
+function normalizeOptions({
+  prefix = "Hello",
+  suffix = "!",
+  fallbackName = "world",
+  separator = ", ",
+}: GreetingOptions = {}): Required<GreetingOptions> {
+  return {
+    prefix: prefix.trim() || "Hello",
+    suffix,
+    fallbackName: fallbackName.trim() || "world",
+    separator,
+  };
+}
+
+function formatGreeting(name = "", { prefix, suffix, fallbackName, separator }: Required<GreetingOptions>): string {
+  return `${prefix}${separator}${name.trim() || fallbackName}${suffix}`;
+}
+
 /** Return a greeting; omitted or blank names use the configured fallback name. */
-export function greet(
-  name = "",
-  { prefix = "Hello", suffix = "!", fallbackName = "world", separator = ", " }: GreetingOptions = {},
-): string {
-  return `${prefix.trim() || "Hello"}${separator}${name.trim() || fallbackName.trim() || "world"}${suffix}`;
+export function greet(name = "", options?: GreetingOptions): string {
+  return formatGreeting(name, normalizeOptions(options));
 }
 
 /** Greet every position in order, using the fallback for sparse entries without modifying the input list. */
 export function greetMany(names: readonly string[], options?: GreetingOptions): string[] {
-  return Array.from(names, (name) => greet(name, options));
+  const normalizedOptions = normalizeOptions(options);
+  return Array.from(names, (name) => formatGreeting(name, normalizedOptions));
 }
