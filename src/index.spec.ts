@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { greet, greetMany } from "./index";
+import { createGreeter, greet, greetMany } from "./index";
 
 describe("greet", () => {
   it("greets the world by default", () => {
@@ -60,6 +60,44 @@ describe("greet", () => {
     ["\n", "Hello\nCI!"],
   ])("uses the separator %j without changing it", (separator, expected) => {
     expect(greet("CI", { separator })).toBe(expected);
+  });
+});
+
+describe("createGreeter", () => {
+  it("greets with defaults when no options or name are provided", () => {
+    const greeting = createGreeter();
+
+    expect(greeting()).toBe("Hello, world!");
+    expect(greeting(" CI ")).toBe("Hello, CI!");
+  });
+
+  it("shares custom options across named and fallback greetings", () => {
+    const greeting = createGreeter({ prefix: " Hi ", separator: ": ", suffix: ".", fallbackName: " team " });
+
+    expect(greeting(" CI ")).toBe("Hi: CI.");
+    expect(greeting(" \t\n")).toBe("Hi: team.");
+    expect(greeting()).toBe("Hi: team.");
+  });
+
+  it("keeps a snapshot when the original options are changed", () => {
+    const options = { prefix: "Hi", separator: ": ", suffix: ".", fallbackName: "team" };
+    const greeting = createGreeter(options);
+    options.prefix = "Welcome";
+    options.separator = " / ";
+    options.suffix = "?";
+    options.fallbackName = "everyone";
+
+    expect(greeting("CI")).toBe("Hi: CI.");
+    expect(greeting()).toBe("Hi: team.");
+  });
+
+  it("keeps independently configured greeters separate", () => {
+    const first = createGreeter({ prefix: "Hi", separator: "", suffix: "" });
+    const second = createGreeter({ prefix: "Welcome", fallbackName: "team" });
+
+    expect(first("CI")).toBe("HiCI");
+    expect(second()).toBe("Welcome, team!");
+    expect(first()).toBe("Hiworld");
   });
 });
 

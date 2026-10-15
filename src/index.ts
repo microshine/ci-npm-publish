@@ -33,6 +33,12 @@ export function greet(name = "", options?: GreetingOptions): string {
   return formatGreeting(name, normalizeOptions(options));
 }
 
+/** Create a reusable greeting function that snapshots the options when it is created. */
+export function createGreeter(options?: GreetingOptions): (name?: string) => string {
+  const normalizedOptions = normalizeOptions(options);
+  return (name) => formatGreeting(name, normalizedOptions);
+}
+
 /** Greet every position in order, using the fallback for sparse entries without modifying the input list. */
 export function greetMany(names: readonly string[], options?: GreetingOptions): string[] {
   const normalizedOptions = normalizeOptions(options);
