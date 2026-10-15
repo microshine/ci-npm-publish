@@ -32,6 +32,18 @@ for (const [format, api] of [
   ["ESM import", esm],
   ["CommonJS require", commonjs],
 ]) {
+  test(`${format}: reusable greeters snapshot options and support fallback names`, () => {
+    const options = { prefix: " Hi ", separator: ": ", suffix: ".", fallbackName: " team " };
+    const greeting = api.createGreeter(options);
+    options.prefix = "Welcome";
+    options.fallbackName = "everyone";
+
+    assert.equal(greeting(" CI "), "Hi: CI.");
+    assert.equal(greeting(" \t\n"), "Hi: team.");
+    assert.equal(greeting(), "Hi: team.");
+    assert.equal(api.createGreeter()(), "Hello, world!");
+  });
+
   test(`${format}: greet supports defaults, trimming and custom prefixes`, () => {
     assert.equal(api.greet(), "Hello, world!");
     assert.equal(api.greet("  CI  "), "Hello, CI!");
