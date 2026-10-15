@@ -8,6 +8,8 @@ export interface GreetingOptions {
   fallbackName?: string;
   /** Text between the prefix and name, used as-is; defaults to ", ". */
   separator?: string;
+  /** Text before the name, used as-is; defaults to an empty string. */
+  namePrefix?: string;
 }
 
 interface NormalizedGreetingOptions {
@@ -21,9 +23,10 @@ function normalizeOptions({
   suffix = "!",
   fallbackName = "world",
   separator = ", ",
+  namePrefix = "",
 }: GreetingOptions = {}): NormalizedGreetingOptions {
   return {
-    opening: `${prefix.trim() || "Hello"}${separator}`,
+    opening: `${prefix.trim() || "Hello"}${separator}${namePrefix}`,
     suffix,
     fallbackName: fallbackName.trim() || "world",
   };

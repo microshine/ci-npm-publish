@@ -61,9 +61,30 @@ describe("greet", () => {
   ])("uses the separator %j without changing it", (separator, expected) => {
     expect(greet("CI", { separator })).toBe(expected);
   });
+
+  it.each([
+    ["@", "Hello, @CI!"],
+    ["", "Hello, CI!"],
+    ["\n", "Hello, \nCI!"],
+  ])("uses the name prefix %j without changing it", (namePrefix, expected) => {
+    expect(greet(" CI ", { namePrefix })).toBe(expected);
+  });
+
+  it("adds the name prefix to the fallback name", () => {
+    expect(greet(undefined, { namePrefix: "@", fallbackName: "team" })).toBe("Hello, @team!");
+  });
 });
 
 describe("createGreeter", () => {
+  it("snapshots the name prefix for named and fallback greetings", () => {
+    const options = { namePrefix: "@", fallbackName: "team" };
+    const greeting = createGreeter(options);
+    options.namePrefix = "#";
+
+    expect(greeting("CI")).toBe("Hello, @CI!");
+    expect(greeting()).toBe("Hello, @team!");
+  });
+
   it("greets with defaults when no options or name are provided", () => {
     const greeting = createGreeter();
 
@@ -102,6 +123,13 @@ describe("createGreeter", () => {
 });
 
 describe("greetMany", () => {
+  it("shares a name prefix with every position", () => {
+    expect(greetMany([" CI ", " "], { namePrefix: "@", fallbackName: "team" })).toEqual([
+      "Hello, @CI!",
+      "Hello, @team!",
+    ]);
+  });
+
   it("greets names in order without modifying the input list", () => {
     const names = Object.freeze([" microshine ", "CI"]);
 
@@ -165,6 +193,12 @@ describe("greetMany", () => {
 });
 
 describe("greetJoined", () => {
+  it("supports name prefixes when joining greetings", () => {
+    expect(greetJoined(["CI", " "], { namePrefix: "@", fallbackName: "team" }, " / ")).toBe(
+      "Hello, @CI! / Hello, @team!",
+    );
+  });
+
   it("joins greetings with newlines without changing the input", () => {
     const names = Object.freeze([" CI ", "world"]);
 
