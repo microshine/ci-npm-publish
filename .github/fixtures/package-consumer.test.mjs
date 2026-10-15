@@ -32,6 +32,17 @@ for (const [format, api] of [
   ["ESM import", esm],
   ["CommonJS require", commonjs],
 ]) {
+  test(`${format}: name prefixes work across single, batch, joined, and reusable greetings`, () => {
+    const options = { namePrefix: "@", fallbackName: "team" };
+    const greeting = api.createGreeter(options);
+    assert.equal(api.greet(" CI ", options), "Hello, @CI!");
+    assert.deepEqual(api.greetMany(["CI", " "], options), ["Hello, @CI!", "Hello, @team!"]);
+    assert.equal(api.greetJoined(["CI", " "], options, " / "), "Hello, @CI! / Hello, @team!");
+    options.namePrefix = "#";
+    assert.equal(greeting("CI"), "Hello, @CI!");
+    assert.equal(greeting(), "Hello, @team!");
+  });
+
   test(`${format}: joins greetings with default and custom delimiters`, () => {
     assert.equal(api.greetJoined([" CI ", "team"]), "Hello, CI!\nHello, team!");
     assert.equal(
