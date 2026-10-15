@@ -4,7 +4,7 @@
 Пакет: **`@microshine/ci-npm-publish`**, реестр: **`https://npm.pkg.github.com`** (GitHub Packages).
 
 Процесс основан на CI в `pvtsutils`: общие проверки, PR с новой версией, публикация после слияния,
-теги и GitHub Release. Conventional Changelog генерирует список изменений в описании релизного PR;
+теги и GitHub Release. Список изменений из заголовков слитых PR с Angular preset попадает в описание релизного PR;
 после слияния этот текст переносится в GitHub Release. Отдельный файл с историей изменений не ведётся.
 Для публикации используется встроенный `GITHUB_TOKEN` с правом `packages: write`.
 
@@ -56,8 +56,9 @@ npm run package:check -- /absolute/path/from-pack-output.tgz
 Проверка создаёт временный проект-потребитель, устанавливает архив и запускает тесты через `node:test`.
 
 `npm run format` и `npm run lint:fix` исправляют оформление и замечания линтера.
-`src/index.spec.ts` содержит тесты модуля, `.github/scripts/release-notes.spec.mjs` — тесты подготовки
-и переноса release notes. `build/` и `coverage/` генерируются и не коммитятся.
+`src/index.spec.ts` содержит тесты модуля, `.github/scripts/pr-release-notes.spec.mjs` — тесты генерации
+из заголовков PR, `.github/scripts/release-notes.spec.mjs` — тесты подготовки и переноса release notes.
+`build/` и `coverage/` генерируются и не коммитятся.
 Сборка через tsdown проверяет типы/экспорты пакета с помощью Are the Types Wrong.
 Если сборка обновила поля экспортов в `package.json`, включи их в коммит: CI проверяет отсутствие таких изменений.
 
@@ -121,10 +122,38 @@ npm run package:check -- /absolute/path/from-pack-output.tgz
 5. **Publish** повторно проверит код, опубликует новую версию в GitHub Packages и перенесёт проверенные заметки
    из описания слитого PR в GitHub Release.
 
-Используй Conventional Commits: `feat:`, `fix:`, `perf:` и `BREAKING CHANGE:` попадают в release notes
-с Angular preset. Если релиз содержит только `ci:` / `docs:` / `chore:`, добавь описание вручную в раздел
-**Release notes** релизного PR: публикация останавливается при пустых заметках.
-Тип повышения версии выбирается вручную, а не вычисляется из коммитов.
+Release notes формируются **из заголовков слитых PR**. В них попадают PR в `main`, чей merge-коммит,
+squash-коммит или последний коммит после rebase находится между предыдущим тегом `vX.Y.Z` и текущим `HEAD`.
+До первого тега рассматривается вся история; перемещаемый тег `vX` не используется.
+Заголовки обрабатываются тем же Angular preset, который раньше использовался для коммитов:
+
+| Пример заголовка PR                         | Раздел release notes                      |
+| ------------------------------------------- | ----------------------------------------- |
+| `feat: add a greeting option`               | Features                                  |
+| `fix(parser): handle blank names`           | Bug Fixes, с указанием scope `parser`     |
+| `perf: cache greetings`                     | Performance Improvements                  |
+| `revert: remove a greeting option`          | Reverts                                   |
+| `feat(api)!: change the greeting signature` | Features и BREAKING CHANGES               |
+| `ci!: require Node.js 24`                   | Continuous Integration и BREAKING CHANGES |
+| `ci:`, `docs:`, `chore:` без `!`            | Не включаются                             |
+
+Каждая запись содержит ссылку на PR. Неслитые PR, PR в другие ветки, уже выпущенные изменения и коммиты
+без PR не включаются. Тело PR не используется: несовместимое изменение отметь `!` перед двоеточием в заголовке.
+Если все PR отфильтрованы или PR нет, добавь описание вручную в раздел **Release notes** релизного PR:
+публикация останавливается при пустых заметках. Тип повышения версии выбирается вручную.
+
+Для локальной генерации нужны полная история с тегами, [GitHub CLI](https://cli.github.com/) и авторизация
+через `gh auth login` или `GH_TOKEN` с правом чтения PR:
+
+```bash
+git fetch --tags
+npm version patch --no-git-tag-version
+npm run --silent changelog
+```
+
+Команда выводит release notes в stdout. Репозиторий берётся из `GITHUB_REPOSITORY` или поля `repository.url`
+в `package.json`; ветка по умолчанию — `main` (можно задать `RELEASE_BASE_BRANCH`).
+Генератор завершится с ошибкой, если версия уже имеет тег: сначала повысь версию пакета.
 
 Заметки находятся между скрытыми HTML-маркерами в описании PR. При редактировании сохраняй эти строки:
 
@@ -153,12 +182,13 @@ Publish получает релизный PR по коммиту его слия
 
 ### Сценарий обкатки с несколькими коммитами
 
-1. Создай PR с несколькими `feat:` / `fix:` коммитами и отдельным `docs:` коммитом.
+1. Создай PR с несколькими коммитами и заголовком `feat: add a greeting option`.
    На PR запускается **Test**; **Publish** запускается после изменения версии в `main`.
-2. Для проверки release notes по отдельным коммитам слей PR через **Create a merge commit**.
-   При squash merge используется только итоговое сообщение: задай PR заголовок с `feat:` или `fix:`.
+2. Слей PR через merge, squash или rebase. Во всех случаях источником заметки служит заголовок PR.
+   Для проверки фильтрации отдельно слей PR с заголовком `docs: update greeting examples`.
 3. Запусти **Version Bump** с `minor` для новых функций или с `patch` для исправлений.
-   В описании релизного PR проверь release notes: изменения `feat:` / `fix:` должны попасть в них, `docs:` — нет.
+   В описании релизного PR проверь release notes: PR с `feat:` должен попасть в них одной записью со ссылкой,
+   PR с `docs:` — нет.
 4. После слияния релизного PR проверь новую версию в **Packages**, теги и GitHub Release.
    Если используется `GITHUB_TOKEN`, подтверди запуск CI на созданном ботом релизном PR, когда GitHub попросит.
 

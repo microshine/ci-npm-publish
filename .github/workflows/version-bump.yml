@@ -49,10 +49,12 @@ jobs:
           npm version "$BUMP" --no-git-tag-version
           echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
-      - name: Prepare release notes and pull request description
+      - name: Prepare release notes from PR titles and pull request description
         env:
           VERSION: ${{ steps.version.outputs.version }}
           BUMP: ${{ inputs.bump }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BASE_BRANCH: main
         run: |
           npm run --silent changelog > "$RUNNER_TEMP/release-notes.md"
           node .github/scripts/release-notes.mjs prepare \
