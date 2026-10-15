@@ -203,6 +203,51 @@ gh workflow run publish.yml --ref vX.Y.Z
    перемещаемый тег `vX` должен остаться на новой версии.
 5. Установи выпущенную версию в отдельный проект-потребитель по инструкции ниже и проверь API.
 
+### Готовый стек PR для проверки Conventional Commits
+
+| Порядок | PR                                                                                                         | Коммиты в самом PR        | Ожидаемый раздел release notes |
+| ------- | ---------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------ |
+| 1       | [#17 — фабрика приветствий](https://github.com/microshine/ci-npm-publish/pull/17)                          | 3: `feat`, `test`, `docs` | Features                       |
+| 2       | [#18 — унаследованные элементы разреженного массива](https://github.com/microshine/ci-npm-publish/pull/18) | 2: `fix`, `test`          | Bug Fixes                      |
+| 3       | [#19 — подготовка начала приветствия один раз](https://github.com/microshine/ci-npm-publish/pull/19)       | 1: `perf`                 | Performance Improvements       |
+| 4       | `docs(releases): document the release-please trial stack` — этот документ                                  | 2: `docs`, `docs`         | Не включается                  |
+
+Стек начинается от `main`; каждый следующий PR открыт в ветку предыдущего, поэтому его diff показывает
+только собственное изменение. Сливай каждый PR непосредственно в `main`, по порядку:
+
+1. Дождись **Test** на #17 и слей его в `main` через **Create a merge commit**.
+2. Переключи base #18 на `main`, проверь diff и **Test**, затем слей его таким же способом.
+   Повтори это для #19 и последнего PR с документацией. Слияние сохраняет отдельные коммиты для проверки фильтрации.
+3. Если используешь **Squash and merge** или **Rebase and merge**, сначала перенеси оставшиеся ветки стека
+   через rebase на новый `main`, сохраняя только их собственные коммиты, и обнови PR. Иначе исходные коммиты
+   предыдущих PR могут повторно попасть в историю и release notes. При squash используй Conventional Commit из заголовка PR.
+4. До завершения стека не сливай автоматически обновляемый релизный PR release-please.
+   После всех четырёх PR проверь по одной записи из этого стека в **Features**, **Bug Fixes**
+   и **Performance Improvements**. Коммиты `test` и `docs` должны отсутствовать; общий bump — minor
+   относительно последнего релиза. Другие невыпущенные изменения могут добавить свои записи.
+5. Слей релизный PR, дождись **Publish** и проверь новую версию в GitHub Packages, точный тег,
+   major-тег и GitHub Release. Установи пакет в отдельный проект и проверь:
+
+```js
+import assert from "node:assert/strict";
+import { createGreeter, greetMany } from "@microshine/ci-npm-publish";
+
+const options = { prefix: "Hi", separator: ": ", fallbackName: "team" };
+const greeting = createGreeter(options);
+options.prefix = "Welcome";
+assert.equal(greeting("CI"), "Hi: CI!");
+assert.equal(greeting(), "Hi: team!");
+
+const names = [, "CI"];
+const prototype = Object.create(Array.prototype);
+Object.defineProperty(prototype, "0", { value: "inherited" });
+Object.setPrototypeOf(names, prototype);
+assert.deepEqual(greetMany(names, { fallbackName: "team" }), ["Hello, team!", "Hello, CI!"]);
+```
+
+Повторный **Publish** запускай из выпущенного тега: существующая версия пакета должна быть пропущена.
+Отдельный будущий PR только с `docs` или `test` не должен самостоятельно открывать релизный PR.
+
 ## Установка из GitHub Packages
 
 Для локальной установки нужен **personal access token (classic)** с правом **`read:packages`** и доступом к пакету,
