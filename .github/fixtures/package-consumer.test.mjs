@@ -66,4 +66,14 @@ for (const [format, api] of [
       "Hi, team.",
     ]);
   });
+
+  test(`${format}: greeting helpers support custom and empty separators`, () => {
+    assert.equal(api.greet("CI", { separator: ": " }), "Hello: CI!");
+    assert.equal(api.greet("CI", { separator: "" }), "HelloCI!");
+    assert.equal(api.greet("CI", { separator: "\n" }), "Hello\nCI!");
+    assert.deepEqual(api.greetMany(["CI", " "], { prefix: "Hi", separator: ": ", fallbackName: "team" }), [
+      "Hi: CI!",
+      "Hi: team!",
+    ]);
+  });
 }

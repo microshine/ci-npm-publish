@@ -6,14 +6,16 @@ export interface GreetingOptions {
   suffix?: string;
   /** Name used for omitted or blank input; omitted or blank values use "world". */
   fallbackName?: string;
+  /** Text between the prefix and name, used as-is; defaults to ", ". */
+  separator?: string;
 }
 
 /** Return a greeting; omitted or blank names use the configured fallback name. */
 export function greet(
   name = "",
-  { prefix = "Hello", suffix = "!", fallbackName = "world" }: GreetingOptions = {},
+  { prefix = "Hello", suffix = "!", fallbackName = "world", separator = ", " }: GreetingOptions = {},
 ): string {
-  return `${prefix.trim() || "Hello"}, ${name.trim() || fallbackName.trim() || "world"}${suffix}`;
+  return `${prefix.trim() || "Hello"}${separator}${name.trim() || fallbackName.trim() || "world"}${suffix}`;
 }
 
 /** Greet each name in order without modifying the input list. */
