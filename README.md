@@ -10,11 +10,12 @@ Conventional Commits → релизный PR → тег и GitHub Release → п
 
 ## Модуль
 
-Три функции: `greet` для одного имени, `greetMany` для списка имён и `createGreeter` для повторного использования настроек.
+Четыре функции: `greet` для одного имени, `greetMany` для списка имён, `greetJoined` для объединённого текста
+и `createGreeter` для повторного использования настроек.
 Сборка ESM, с TypeScript-декларациями, без зависимостей времени выполнения.
 
 ```ts
-import { createGreeter, greet, greetMany } from "@microshine/ci-npm-publish";
+import { createGreeter, greet, greetJoined, greetMany } from "@microshine/ci-npm-publish";
 
 greet(); // "Hello, world!"
 greet("microshine"); // "Hello, microshine!"
@@ -32,6 +33,9 @@ greetMany(["CI", " "], { prefix: "Hi", suffix: ".", fallbackName: "team" });
 const welcome = createGreeter({ prefix: "Welcome", separator: ": ", fallbackName: "team" });
 welcome("CI"); // "Welcome: CI!"
 welcome(); // "Welcome: team!"
+
+greetJoined(["CI", "team"]); // "Hello, CI!\nHello, team!"
+greetJoined(["CI", " "], { fallbackName: "team" }, " / "); // "Hello, CI! / Hello, team!"
 ```
 
 Имена, префикс и `fallbackName` очищаются от пробелов по краям. Отсутствующее или пустое имя заменяется
@@ -61,6 +65,9 @@ greeting(); // "Hi: team."
 
 Для разовой обработки списка используй `greetMany`; для отдельных вызовов с одинаковыми настройками —
 `createGreeter`. В обоих случаях начало приветствия готовится один раз для выбранных настроек.
+
+`greetJoined(names, options, joiner)` объединяет результат `greetMany` в строку. По умолчанию `joiner` —
+перевод строки; пустой разделитель соединяет приветствия вплотную, а пустой список возвращает пустую строку.
 
 ## Локальная разработка
 

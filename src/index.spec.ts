@@ -187,7 +187,9 @@ describe("greetJoined", () => {
   });
 
   it("uses fallback greetings for inherited sparse entries", () => {
-    const names = [, "CI"] as string[];
+    const names: string[] = [];
+    names.length = 2;
+    names[1] = "CI";
     const prototype = Object.create(Array.prototype);
     Object.defineProperty(prototype, "0", { value: "inherited" });
     Object.setPrototypeOf(names, prototype);

@@ -32,6 +32,16 @@ for (const [format, api] of [
   ["ESM import", esm],
   ["CommonJS require", commonjs],
 ]) {
+  test(`${format}: joins greetings with default and custom delimiters`, () => {
+    assert.equal(api.greetJoined([" CI ", "team"]), "Hello, CI!\nHello, team!");
+    assert.equal(
+      api.greetJoined(["CI", " "], { prefix: "Hi", separator: ": ", fallbackName: "team" }, " / "),
+      "Hi: CI! / Hi: team!",
+    );
+    assert.equal(api.greetJoined([]), "");
+    assert.equal(api.greetJoined(["CI", "team"], { suffix: "" }, ""), "Hello, CIHello, team");
+  });
+
   test(`${format}: reusable greeters snapshot options and support fallback names`, () => {
     const options = { prefix: " Hi ", separator: ": ", suffix: ".", fallbackName: " team " };
     const greeting = api.createGreeter(options);
