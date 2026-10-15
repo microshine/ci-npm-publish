@@ -10,11 +10,11 @@ Conventional Commits → релизный PR → тег и GitHub Release → п
 
 ## Модуль
 
-Две простые функции: `greet` для одного имени и `greetMany` для списка имён.
+Три функции: `greet` для одного имени, `greetMany` для списка имён и `createGreeter` для повторного использования настроек.
 Сборка ESM, с TypeScript-декларациями, без зависимостей времени выполнения.
 
 ```ts
-import { greet, greetMany } from "@microshine/ci-npm-publish";
+import { createGreeter, greet, greetMany } from "@microshine/ci-npm-publish";
 
 greet(); // "Hello, world!"
 greet("microshine"); // "Hello, microshine!"
@@ -28,6 +28,10 @@ greetMany(["microshine", "CI"]); // ["Hello, microshine!", "Hello, CI!"]
 greetMany(["CI", " "], { prefix: "Hi" }); // ["Hi, CI!", "Hi, world!"]
 greetMany(["CI", " "], { prefix: "Hi", suffix: ".", fallbackName: "team" });
 // ["Hi, CI.", "Hi, team."]
+
+const welcome = createGreeter({ prefix: "Welcome", separator: ": ", fallbackName: "team" });
+welcome("CI"); // "Welcome: CI!"
+welcome(); // "Welcome: team!"
 ```
 
 Имена, префикс и `fallbackName` очищаются от пробелов по краям. Отсутствующее или пустое имя заменяется
@@ -38,6 +42,10 @@ greetMany(["CI", " "], { prefix: "Hi", suffix: ".", fallbackName: "team" });
 `greetMany` применяет одни и те же настройки ко всем именам, сохраняет порядок и не изменяет исходный список;
 пустой список возвращает `[]`. Пропуски в разреженном массиве получают приветствие с `fallbackName`.
 Префикс и резервное имя нормализуются один раз на весь список.
+
+`createGreeter` сохраняет настройки в момент создания функции и использует их для всех последующих вызовов.
+Изменение исходного объекта настроек не меняет готовую функцию. Имена очищаются от пробелов при каждом вызове;
+отсутствующее или пустое имя использует сохранённый `fallbackName`.
 
 ## Локальная разработка
 
