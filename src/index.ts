@@ -10,22 +10,27 @@ export interface GreetingOptions {
   separator?: string;
 }
 
+interface NormalizedGreetingOptions {
+  opening: string;
+  suffix: string;
+  fallbackName: string;
+}
+
 function normalizeOptions({
   prefix = "Hello",
   suffix = "!",
   fallbackName = "world",
   separator = ", ",
-}: GreetingOptions = {}): Required<GreetingOptions> {
+}: GreetingOptions = {}): NormalizedGreetingOptions {
   return {
-    prefix: prefix.trim() || "Hello",
+    opening: `${prefix.trim() || "Hello"}${separator}`,
     suffix,
     fallbackName: fallbackName.trim() || "world",
-    separator,
   };
 }
 
-function formatGreeting(name = "", { prefix, suffix, fallbackName, separator }: Required<GreetingOptions>): string {
-  return `${prefix}${separator}${name.trim() || fallbackName}${suffix}`;
+function formatGreeting(name = "", { opening, suffix, fallbackName }: NormalizedGreetingOptions): string {
+  return `${opening}${name.trim() || fallbackName}${suffix}`;
 }
 
 /** Return a greeting; omitted or blank names use the configured fallback name. */
