@@ -21,6 +21,8 @@ greet("microshine"); // "Hello, microshine!"
 greet("CI", { prefix: "Hi" }); // "Hi, CI!"
 greet("CI", { suffix: "." }); // "Hello, CI."
 greet("CI", { suffix: "" }); // "Hello, CI"
+greet("CI", { prefix: "Hi", separator: ": " }); // "Hi: CI!"
+greet("CI", { separator: "" }); // "HelloCI!"
 greet(undefined, { fallbackName: "team" }); // "Hello, team!"
 greetMany(["microshine", "CI"]); // ["Hello, microshine!", "Hello, CI!"]
 greetMany(["CI", " "], { prefix: "Hi" }); // ["Hi, CI!", "Hi, world!"]
@@ -32,8 +34,10 @@ greetMany(["CI", " "], { prefix: "Hi", suffix: ".", fallbackName: "team" });
 на `fallbackName` (по умолчанию `world`); пустой `fallbackName` также заменяется на `world`.
 Пустой префикс заменяется на `Hello`. `suffix` добавляется после имени без изменений: по умолчанию `!`,
 пустая строка убирает знак в конце, а пробелы сохраняются — например, `suffix: " 👋"`.
+`separator` задаёт текст между префиксом и именем: по умолчанию `", "`; пустая строка и пробелы сохраняются.
 `greetMany` применяет одни и те же настройки ко всем именам, сохраняет порядок и не изменяет исходный список;
-пустой список возвращает `[]`.
+пустой список возвращает `[]`. Пропуски в разреженном массиве получают приветствие с `fallbackName`.
+Префикс и резервное имя нормализуются один раз на весь список.
 
 ## Локальная разработка
 
@@ -194,6 +198,41 @@ Publish получает релизный PR по коммиту его слия
 
 Описание API выше относится к текущему исходному коду. После слияния функциональных изменений нужен отдельный
 Version Bump и релиз, чтобы новые функции появились в устанавливаемом пакете.
+
+### Стек PR для проверки release notes и публикации
+
+| Порядок | PR                                                                                                                       | Ожидаемый раздел release notes |
+| ------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
+| 1       | [#9 — feat(greetings): support custom greeting separators](https://github.com/microshine/ci-npm-publish/pull/9)          | Features                       |
+| 2       | [#10 — fix(greetings): greet missing entries in sparse name lists](https://github.com/microshine/ci-npm-publish/pull/10) | Bug Fixes                      |
+| 3       | [#11 — perf(greetings): normalize options once per greeting batch](https://github.com/microshine/ci-npm-publish/pull/11) | Performance Improvements       |
+| 4       | `docs(greetings): document the stacked release trial` — этот документ                                                    | Отфильтрован                   |
+
+1. Дождись **Test** и слей #9 в `main`. Затем последовательно меняй base следующего PR на `main`,
+   проверяй diff и CI и сливай его. Каждый из четырёх PR должен быть слит непосредственно в `main`:
+   генератор отбирает PR по базовой ветке.
+2. Запусти **Version Bump** на `main` с `minor`. В релизном PR проверь по одной записи со ссылками на #9, #10
+   и #11 в трёх соответствующих разделах. `docs(greetings)` должен отсутствовать; отдельные коммиты этих PR
+   не должны создавать дополнительные записи. Возможны записи других PR, слитых после предыдущего тега.
+3. Проверь версию пакета и release notes между HTML-маркерами, дождись **Test** и слей релизный PR.
+   После завершения **Publish** проверь новую версию в **Packages**, теги `vX.Y.Z` / `vX` и текст GitHub Release.
+4. Установи выпущенную версию в отдельный проект-потребитель с доступом к GitHub Packages и выполни:
+
+```js
+import assert from "node:assert/strict";
+import { greet, greetMany } from "@microshine/ci-npm-publish";
+
+assert.equal(greet("CI", { prefix: "Hi", separator: ": " }), "Hi: CI!");
+assert.equal(greet("CI", { separator: "" }), "HelloCI!");
+const names = [];
+names.length = 3;
+names[1] = "CI";
+assert.deepEqual(greetMany(Object.freeze(names), { separator: ": ", fallbackName: "team" }), [
+  "Hello: team!",
+  "Hello: CI!",
+  "Hello: team!",
+]);
+```
 
 ## Установка из GitHub Packages
 
