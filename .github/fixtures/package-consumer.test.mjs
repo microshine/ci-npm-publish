@@ -66,4 +66,27 @@ for (const [format, api] of [
       "Hi, team.",
     ]);
   });
+
+  test(`${format}: greeting helpers support custom and empty separators`, () => {
+    assert.equal(api.greet("CI", { separator: ": " }), "Hello: CI!");
+    assert.equal(api.greet("CI", { separator: "" }), "HelloCI!");
+    assert.equal(api.greet("CI", { separator: "\n" }), "Hello\nCI!");
+    assert.deepEqual(api.greetMany(["CI", " "], { prefix: "Hi", separator: ": ", fallbackName: "team" }), [
+      "Hi: CI!",
+      "Hi: team!",
+    ]);
+  });
+
+  test(`${format}: sparse name lists use fallback greetings without changing the input`, () => {
+    const names = [];
+    names.length = 3;
+    names[1] = " CI ";
+    Object.freeze(names);
+    assert.deepEqual(api.greetMany(names, { prefix: "Hi", separator: ": ", fallbackName: "team" }), [
+      "Hi: team!",
+      "Hi: CI!",
+      "Hi: team!",
+    ]);
+    assert.deepEqual(Object.keys(names), ["1"]);
+  });
 }

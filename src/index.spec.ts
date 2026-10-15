@@ -53,6 +53,14 @@ describe("greet", () => {
   it("prefers the provided name over the fallback", () => {
     expect(greet(" CI ", { fallbackName: "team" })).toBe("Hello, CI!");
   });
+
+  it.each([
+    [": ", "Hello: CI!"],
+    ["", "HelloCI!"],
+    ["\n", "Hello\nCI!"],
+  ])("uses the separator %j without changing it", (separator, expected) => {
+    expect(greet("CI", { separator })).toBe(expected);
+  });
 });
 
 describe("greetMany", () => {
@@ -80,5 +88,26 @@ describe("greetMany", () => {
 
   it("returns an empty list when there are no names", () => {
     expect(greetMany([])).toEqual([]);
+  });
+
+  it("shares the separator with every greeting and the fallback name", () => {
+    expect(greetMany([" CI ", " "], { prefix: " Hi ", separator: ": ", suffix: ".", fallbackName: "team" })).toEqual([
+      "Hi: CI.",
+      "Hi: team.",
+    ]);
+  });
+
+  it("fills missing entries in sparse name lists with fallback greetings", () => {
+    const names: string[] = [];
+    names.length = 3;
+    names[1] = " CI ";
+    Object.freeze(names);
+
+    expect(greetMany(names, { prefix: "Hi", separator: ": ", fallbackName: "team" })).toEqual([
+      "Hi: team!",
+      "Hi: CI!",
+      "Hi: team!",
+    ]);
+    expect(Object.keys(names)).toEqual(["1"]);
   });
 });
