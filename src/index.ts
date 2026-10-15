@@ -51,3 +51,8 @@ export function greetMany(names: readonly string[], options?: GreetingOptions): 
     formatGreeting(Object.hasOwn(names, index) ? names[index] : undefined, normalizedOptions),
   );
 }
+
+/** Join ordered greetings with the given text; defaults to a newline and returns an empty string for an empty list. */
+export function greetJoined(names: readonly string[], options?: GreetingOptions, joiner = "\n"): string {
+  return greetMany(names, options).join(joiner);
+}
