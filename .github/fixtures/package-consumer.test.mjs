@@ -32,6 +32,18 @@ for (const [format, api] of [
   ["ESM import", esm],
   ["CommonJS require", commonjs],
 ]) {
+  test(`${format}: reusable greeters snapshot options and support fallback names`, () => {
+    const options = { prefix: " Hi ", separator: ": ", suffix: ".", fallbackName: " team " };
+    const greeting = api.createGreeter(options);
+    options.prefix = "Welcome";
+    options.fallbackName = "everyone";
+
+    assert.equal(greeting(" CI "), "Hi: CI.");
+    assert.equal(greeting(" \t\n"), "Hi: team.");
+    assert.equal(greeting(), "Hi: team.");
+    assert.equal(api.createGreeter()(), "Hello, world!");
+  });
+
   test(`${format}: greet supports defaults, trimming and custom prefixes`, () => {
     assert.equal(api.greet(), "Hello, world!");
     assert.equal(api.greet("  CI  "), "Hello, CI!");
@@ -87,6 +99,20 @@ for (const [format, api] of [
       "Hi: CI!",
       "Hi: team!",
     ]);
+    assert.deepEqual(Object.keys(names), ["1"]);
+  });
+
+  test(`${format}: inherited values do not replace fallback greetings in sparse lists`, () => {
+    const names = [];
+    names.length = 3;
+    names[1] = " CI ";
+    const prototype = Object.create(Array.prototype);
+    Object.defineProperty(prototype, "0", { value: "inherited" });
+    Object.setPrototypeOf(names, prototype);
+    Object.freeze(names);
+
+    assert.deepEqual(api.greetMany(names, { fallbackName: "team" }), ["Hello, team!", "Hello, CI!", "Hello, team!"]);
+    assert.equal(names[0], "inherited");
     assert.deepEqual(Object.keys(names), ["1"]);
   });
 }

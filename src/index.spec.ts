@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { greet, greetMany } from "./index";
+import { createGreeter, greet, greetMany } from "./index";
 
 describe("greet", () => {
   it("greets the world by default", () => {
@@ -63,6 +63,44 @@ describe("greet", () => {
   });
 });
 
+describe("createGreeter", () => {
+  it("greets with defaults when no options or name are provided", () => {
+    const greeting = createGreeter();
+
+    expect(greeting()).toBe("Hello, world!");
+    expect(greeting(" CI ")).toBe("Hello, CI!");
+  });
+
+  it("shares custom options across named and fallback greetings", () => {
+    const greeting = createGreeter({ prefix: " Hi ", separator: ": ", suffix: ".", fallbackName: " team " });
+
+    expect(greeting(" CI ")).toBe("Hi: CI.");
+    expect(greeting(" \t\n")).toBe("Hi: team.");
+    expect(greeting()).toBe("Hi: team.");
+  });
+
+  it("keeps a snapshot when the original options are changed", () => {
+    const options = { prefix: "Hi", separator: ": ", suffix: ".", fallbackName: "team" };
+    const greeting = createGreeter(options);
+    options.prefix = "Welcome";
+    options.separator = " / ";
+    options.suffix = "?";
+    options.fallbackName = "everyone";
+
+    expect(greeting("CI")).toBe("Hi: CI.");
+    expect(greeting()).toBe("Hi: team.");
+  });
+
+  it("keeps independently configured greeters separate", () => {
+    const first = createGreeter({ prefix: "Hi", separator: "", suffix: "" });
+    const second = createGreeter({ prefix: "Welcome", fallbackName: "team" });
+
+    expect(first("CI")).toBe("HiCI");
+    expect(second()).toBe("Welcome, team!");
+    expect(first()).toBe("Hiworld");
+  });
+});
+
 describe("greetMany", () => {
   it("greets names in order without modifying the input list", () => {
     const names = Object.freeze([" microshine ", "CI"]);
@@ -108,6 +146,20 @@ describe("greetMany", () => {
       "Hi: CI!",
       "Hi: team!",
     ]);
+    expect(Object.keys(names)).toEqual(["1"]);
+  });
+
+  it("uses fallback greetings for holes that have inherited array values", () => {
+    const names: string[] = [];
+    names.length = 3;
+    names[1] = " CI ";
+    const prototype = Object.create(Array.prototype);
+    Object.defineProperty(prototype, "0", { value: "inherited" });
+    Object.setPrototypeOf(names, prototype);
+    Object.freeze(names);
+
+    expect(greetMany(names, { fallbackName: "team" })).toEqual(["Hello, team!", "Hello, CI!", "Hello, team!"]);
+    expect(names[0]).toBe("inherited");
     expect(Object.keys(names)).toEqual(["1"]);
   });
 });

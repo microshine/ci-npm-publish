@@ -10,11 +10,11 @@ Conventional Commits → релизный PR → тег и GitHub Release → п
 
 ## Модуль
 
-Две простые функции: `greet` для одного имени и `greetMany` для списка имён.
+Три функции: `greet` для одного имени, `greetMany` для списка имён и `createGreeter` для повторного использования настроек.
 Сборка ESM, с TypeScript-декларациями, без зависимостей времени выполнения.
 
 ```ts
-import { greet, greetMany } from "@microshine/ci-npm-publish";
+import { createGreeter, greet, greetMany } from "@microshine/ci-npm-publish";
 
 greet(); // "Hello, world!"
 greet("microshine"); // "Hello, microshine!"
@@ -28,6 +28,10 @@ greetMany(["microshine", "CI"]); // ["Hello, microshine!", "Hello, CI!"]
 greetMany(["CI", " "], { prefix: "Hi" }); // ["Hi, CI!", "Hi, world!"]
 greetMany(["CI", " "], { prefix: "Hi", suffix: ".", fallbackName: "team" });
 // ["Hi, CI.", "Hi, team."]
+
+const welcome = createGreeter({ prefix: "Welcome", separator: ": ", fallbackName: "team" });
+welcome("CI"); // "Welcome: CI!"
+welcome(); // "Welcome: team!"
 ```
 
 Имена, префикс и `fallbackName` очищаются от пробелов по краям. Отсутствующее или пустое имя заменяется
@@ -37,7 +41,26 @@ greetMany(["CI", " "], { prefix: "Hi", suffix: ".", fallbackName: "team" });
 `separator` задаёт текст между префиксом и именем: по умолчанию `", "`; пустая строка и пробелы сохраняются.
 `greetMany` применяет одни и те же настройки ко всем именам, сохраняет порядок и не изменяет исходный список;
 пустой список возвращает `[]`. Пропуски в разреженном массиве получают приветствие с `fallbackName`.
+Унаследованные числовые свойства не заполняют пропуски: учитываются только собственные элементы массива.
 Префикс и резервное имя нормализуются один раз на весь список.
+
+`createGreeter` сохраняет настройки в момент создания функции и использует их для всех последующих вызовов.
+Изменение исходного объекта настроек не меняет готовую функцию. Имена очищаются от пробелов при каждом вызове;
+отсутствующее или пустое имя использует сохранённый `fallbackName`.
+
+Например, одна фабрика подходит для нескольких независимых списков имён:
+
+```ts
+const options = { prefix: "Hi", separator: ": ", suffix: ".", fallbackName: "team" };
+const greeting = createGreeter(options);
+options.prefix = "Welcome";
+
+["CI", " "].map(greeting); // ["Hi: CI.", "Hi: team."]
+greeting(); // "Hi: team."
+```
+
+Для разовой обработки списка используй `greetMany`; для отдельных вызовов с одинаковыми настройками —
+`createGreeter`. В обоих случаях начало приветствия готовится один раз для выбранных настроек.
 
 ## Локальная разработка
 
@@ -179,6 +202,51 @@ gh workflow run publish.yml --ref vX.Y.Z
    Запуск из `main` должен завершиться понятной ошибкой. После следующего релиза повтори старый тег:
    перемещаемый тег `vX` должен остаться на новой версии.
 5. Установи выпущенную версию в отдельный проект-потребитель по инструкции ниже и проверь API.
+
+### Готовый стек PR для проверки Conventional Commits
+
+| Порядок | PR                                                                                                         | Коммиты в самом PR        | Ожидаемый раздел release notes |
+| ------- | ---------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------ |
+| 1       | [#17 — фабрика приветствий](https://github.com/microshine/ci-npm-publish/pull/17)                          | 3: `feat`, `test`, `docs` | Features                       |
+| 2       | [#18 — унаследованные элементы разреженного массива](https://github.com/microshine/ci-npm-publish/pull/18) | 2: `fix`, `test`          | Bug Fixes                      |
+| 3       | [#19 — подготовка начала приветствия один раз](https://github.com/microshine/ci-npm-publish/pull/19)       | 1: `perf`                 | Performance Improvements       |
+| 4       | `docs(releases): document the release-please trial stack` — этот документ                                  | 2: `docs`, `docs`         | Не включается                  |
+
+Стек начинается от `main`; каждый следующий PR открыт в ветку предыдущего, поэтому его diff показывает
+только собственное изменение. Сливай каждый PR непосредственно в `main`, по порядку:
+
+1. Дождись **Test** на #17 и слей его в `main` через **Create a merge commit**.
+2. Переключи base #18 на `main`, проверь diff и **Test**, затем слей его таким же способом.
+   Повтори это для #19 и последнего PR с документацией. Слияние сохраняет отдельные коммиты для проверки фильтрации.
+3. Если используешь **Squash and merge** или **Rebase and merge**, сначала перенеси оставшиеся ветки стека
+   через rebase на новый `main`, сохраняя только их собственные коммиты, и обнови PR. Иначе исходные коммиты
+   предыдущих PR могут повторно попасть в историю и release notes. При squash используй Conventional Commit из заголовка PR.
+4. До завершения стека не сливай автоматически обновляемый релизный PR release-please.
+   После всех четырёх PR проверь по одной записи из этого стека в **Features**, **Bug Fixes**
+   и **Performance Improvements**. Коммиты `test` и `docs` должны отсутствовать; общий bump — minor
+   относительно последнего релиза. Другие невыпущенные изменения могут добавить свои записи.
+5. Слей релизный PR, дождись **Publish** и проверь новую версию в GitHub Packages, точный тег,
+   major-тег и GitHub Release. Установи пакет в отдельный проект и проверь:
+
+```js
+import assert from "node:assert/strict";
+import { createGreeter, greetMany } from "@microshine/ci-npm-publish";
+
+const options = { prefix: "Hi", separator: ": ", fallbackName: "team" };
+const greeting = createGreeter(options);
+options.prefix = "Welcome";
+assert.equal(greeting("CI"), "Hi: CI!");
+assert.equal(greeting(), "Hi: team!");
+
+const names = [, "CI"];
+const prototype = Object.create(Array.prototype);
+Object.defineProperty(prototype, "0", { value: "inherited" });
+Object.setPrototypeOf(names, prototype);
+assert.deepEqual(greetMany(names, { fallbackName: "team" }), ["Hello, team!", "Hello, CI!"]);
+```
+
+Повторный **Publish** запускай из выпущенного тега: существующая версия пакета должна быть пропущена.
+Отдельный будущий PR только с `docs` или `test` не должен самостоятельно открывать релизный PR.
 
 ## Установка из GitHub Packages
 

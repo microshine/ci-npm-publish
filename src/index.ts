@@ -10,22 +10,27 @@ export interface GreetingOptions {
   separator?: string;
 }
 
+interface NormalizedGreetingOptions {
+  opening: string;
+  suffix: string;
+  fallbackName: string;
+}
+
 function normalizeOptions({
   prefix = "Hello",
   suffix = "!",
   fallbackName = "world",
   separator = ", ",
-}: GreetingOptions = {}): Required<GreetingOptions> {
+}: GreetingOptions = {}): NormalizedGreetingOptions {
   return {
-    prefix: prefix.trim() || "Hello",
+    opening: `${prefix.trim() || "Hello"}${separator}`,
     suffix,
     fallbackName: fallbackName.trim() || "world",
-    separator,
   };
 }
 
-function formatGreeting(name = "", { prefix, suffix, fallbackName, separator }: Required<GreetingOptions>): string {
-  return `${prefix}${separator}${name.trim() || fallbackName}${suffix}`;
+function formatGreeting(name = "", { opening, suffix, fallbackName }: NormalizedGreetingOptions): string {
+  return `${opening}${name.trim() || fallbackName}${suffix}`;
 }
 
 /** Return a greeting; omitted or blank names use the configured fallback name. */
@@ -33,8 +38,16 @@ export function greet(name = "", options?: GreetingOptions): string {
   return formatGreeting(name, normalizeOptions(options));
 }
 
-/** Greet every position in order, using the fallback for sparse entries without modifying the input list. */
+/** Create a reusable greeting function that snapshots the options when it is created. */
+export function createGreeter(options?: GreetingOptions): (name?: string) => string {
+  const normalizedOptions = normalizeOptions(options);
+  return (name) => formatGreeting(name, normalizedOptions);
+}
+
+/** Greet every own array position in order, using the fallback for holes even when an inherited value exists. */
 export function greetMany(names: readonly string[], options?: GreetingOptions): string[] {
   const normalizedOptions = normalizeOptions(options);
-  return Array.from(names, (name) => formatGreeting(name, normalizedOptions));
+  return Array.from({ length: names.length }, (_, index) =>
+    formatGreeting(Object.hasOwn(names, index) ? names[index] : undefined, normalizedOptions),
+  );
 }
