@@ -10,11 +10,12 @@ Conventional Commits → релизный PR → тег и GitHub Release → п
 
 ## Модуль
 
-Три функции: `greet` для одного имени, `greetMany` для списка имён и `createGreeter` для повторного использования настроек.
+Четыре функции: `greet` для одного имени, `greetMany` для списка имён, `greetJoined` для объединённого текста
+и `createGreeter` для повторного использования настроек.
 Сборка ESM, с TypeScript-декларациями, без зависимостей времени выполнения.
 
 ```ts
-import { createGreeter, greet, greetMany } from "@microshine/ci-npm-publish";
+import { createGreeter, greet, greetJoined, greetMany } from "@microshine/ci-npm-publish";
 
 greet(); // "Hello, world!"
 greet("microshine"); // "Hello, microshine!"
@@ -23,6 +24,7 @@ greet("CI", { suffix: "." }); // "Hello, CI."
 greet("CI", { suffix: "" }); // "Hello, CI"
 greet("CI", { prefix: "Hi", separator: ": " }); // "Hi: CI!"
 greet("CI", { separator: "" }); // "HelloCI!"
+greet("CI", { namePrefix: "@" }); // "Hello, @CI!"
 greet(undefined, { fallbackName: "team" }); // "Hello, team!"
 greetMany(["microshine", "CI"]); // ["Hello, microshine!", "Hello, CI!"]
 greetMany(["CI", " "], { prefix: "Hi" }); // ["Hi, CI!", "Hi, world!"]
@@ -32,6 +34,9 @@ greetMany(["CI", " "], { prefix: "Hi", suffix: ".", fallbackName: "team" });
 const welcome = createGreeter({ prefix: "Welcome", separator: ": ", fallbackName: "team" });
 welcome("CI"); // "Welcome: CI!"
 welcome(); // "Welcome: team!"
+
+greetJoined(["CI", "team"]); // "Hello, CI!\nHello, team!"
+greetJoined(["CI", " "], { fallbackName: "team" }, " / "); // "Hello, CI! / Hello, team!"
 ```
 
 Имена, префикс и `fallbackName` очищаются от пробелов по краям. Отсутствующее или пустое имя заменяется
@@ -39,6 +44,8 @@ welcome(); // "Welcome: team!"
 Пустой префикс заменяется на `Hello`. `suffix` добавляется после имени без изменений: по умолчанию `!`,
 пустая строка убирает знак в конце, а пробелы сохраняются — например, `suffix: " 👋"`.
 `separator` задаёт текст между префиксом и именем: по умолчанию `", "`; пустая строка и пробелы сохраняются.
+`namePrefix` добавляется непосредственно перед именем или `fallbackName` без изменений; по умолчанию это пустая строка.
+Все четыре функции поддерживают эту настройку, а `createGreeter` сохраняет её значение при создании.
 `greetMany` применяет одни и те же настройки ко всем именам, сохраняет порядок и не изменяет исходный список;
 пустой список возвращает `[]`. Пропуски в разреженном массиве получают приветствие с `fallbackName`.
 Унаследованные числовые свойства не заполняют пропуски: учитываются только собственные элементы массива.
@@ -61,6 +68,22 @@ greeting(); // "Hi: team."
 
 Для разовой обработки списка используй `greetMany`; для отдельных вызовов с одинаковыми настройками —
 `createGreeter`. В обоих случаях начало приветствия готовится один раз для выбранных настроек.
+
+`greetJoined(names, options, joiner)` объединяет результат `greetMany` в строку. По умолчанию `joiner` —
+перевод строки; пустой разделитель соединяет приветствия вплотную, а пустой список возвращает пустую строку.
+
+Для сообщения с несколькими упоминаниями можно объединить настройки:
+
+```ts
+greetJoined(
+  [" CI ", " "],
+  { prefix: "Welcome", separator: ": ", namePrefix: "@", fallbackName: "team", suffix: "." },
+  " | ",
+); // "Welcome: @CI. | Welcome: @team."
+```
+
+Пустые списки в `greetMany` и `greetJoined` возвращают `[]` и `""` без чтения свойств объекта настроек,
+включая геттеры. Для непустого списка настройки нормализуются один раз.
 
 ## Локальная разработка
 
@@ -285,6 +308,48 @@ assert.deepEqual(greetMany(names, { fallbackName: "team" }), ["Hello, team!", "H
 
 Повторный **Publish** запускай из выпущенного тега: существующая версия пакета должна быть пропущена.
 Отдельный будущий PR только с `docs` или `test` не должен самостоятельно открывать релизный PR.
+
+### Второй стек: обычный заголовок без Conventional Commits
+
+Этот стек начинается от выпущенной версии `0.4.0` и проверяет пропуск неконвенционального сообщения:
+
+| Порядок | PR                                                                                                                  | Собственных коммитов | Ожидаемая запись         |
+| ------- | ------------------------------------------------------------------------------------------------------------------- | -------------------- | ------------------------ |
+| 1       | [#24 — Add joined greeting output](https://github.com/microshine/ci-npm-publish/pull/24)                            | 2, оба без конвенции | Пропущен                 |
+| 2       | [#25 — feat(greetings): support prefixes before names](https://github.com/microshine/ci-npm-publish/pull/25)        | 2: `feat`, `test`    | Features                 |
+| 3       | [#26 — perf(greetings): skip work for empty greeting batches](https://github.com/microshine/ci-npm-publish/pull/26) | 1: `perf`            | Performance Improvements |
+| 4       | `docs(releases): document the nonconventional PR trial` — этот документ                                             | 2: `docs`, `docs`    | Пропущен                 |
+
+1. Слей **только #24** в `main`, сохранив обычный заголовок и итоговое сообщение коммита.
+   **Create a merge commit** сохраняет историю стека; при squash оставь обычное сообщение без дополнительных
+   Conventional Commits. Дождись автоматического **Publish**: проверки должны пройти, release-please должен
+   сообщить `No user facing commits found`, а релизный PR только из этого изменения не должен появиться.
+2. Переведи base #25 на `main` и слей его отдельно с конвенциональным сообщением из заголовка.
+   При обычном merge сохраняется родительская история; после squash или rebase сначала перенеси оставшиеся
+   ветки стека на новый `main`, исключив уже слитые коммиты. Проверь появление релизного PR с minor-версией
+   и записью **Features** о `namePrefix`.
+3. Аналогично переведи #26 на `main` и слей его отдельно. Проверь новую запись **Performance Improvements**
+   об обработке пустых списков в том же релизном PR. Последний docs-PR также слей отдельно в `main`.
+4. Проверь отсутствие записи `Add joined greeting output`, тестовых и документальных записей.
+   Для PR #24 переопределение заметок намеренно не задано: это отрицательный сценарий.
+   Все четыре PR должны попасть в `main` отдельными слияниями для независимой проверки их сообщений.
+5. После проверки слей релизный PR и дождись публикации. При отсутствии других изменений версия будет `0.5.0`.
+   Код `greetJoined` из #24 должен оказаться в пакете вместе с `namePrefix`, несмотря на отсутствие своей заметки:
+
+```js
+import assert from "node:assert/strict";
+import { greetJoined, greetMany } from "@microshine/ci-npm-publish";
+
+assert.equal(greetJoined(["CI", " "], { namePrefix: "@", fallbackName: "team" }, " / "), "Hello, @CI! / Hello, @team!");
+
+const options = {
+  get prefix() {
+    throw new Error("Empty input must not read greeting options");
+  },
+};
+assert.deepEqual(greetMany([], options), []);
+assert.equal(greetJoined([], options), "");
+```
 
 ## Установка из GitHub Packages
 

@@ -32,6 +32,37 @@ for (const [format, api] of [
   ["ESM import", esm],
   ["CommonJS require", commonjs],
 ]) {
+  test(`${format}: empty batches and joined output do not access greeting options`, () => {
+    const options = {
+      get prefix() {
+        throw new Error("Empty input must not read greeting options");
+      },
+    };
+    assert.deepEqual(api.greetMany([], options), []);
+    assert.equal(api.greetJoined([], options), "");
+  });
+
+  test(`${format}: name prefixes work across single, batch, joined, and reusable greetings`, () => {
+    const options = { namePrefix: "@", fallbackName: "team" };
+    const greeting = api.createGreeter(options);
+    assert.equal(api.greet(" CI ", options), "Hello, @CI!");
+    assert.deepEqual(api.greetMany(["CI", " "], options), ["Hello, @CI!", "Hello, @team!"]);
+    assert.equal(api.greetJoined(["CI", " "], options, " / "), "Hello, @CI! / Hello, @team!");
+    options.namePrefix = "#";
+    assert.equal(greeting("CI"), "Hello, @CI!");
+    assert.equal(greeting(), "Hello, @team!");
+  });
+
+  test(`${format}: joins greetings with default and custom delimiters`, () => {
+    assert.equal(api.greetJoined([" CI ", "team"]), "Hello, CI!\nHello, team!");
+    assert.equal(
+      api.greetJoined(["CI", " "], { prefix: "Hi", separator: ": ", fallbackName: "team" }, " / "),
+      "Hi: CI! / Hi: team!",
+    );
+    assert.equal(api.greetJoined([]), "");
+    assert.equal(api.greetJoined(["CI", "team"], { suffix: "" }, ""), "Hello, CIHello, team");
+  });
+
   test(`${format}: reusable greeters snapshot options and support fallback names`, () => {
     const options = { prefix: " Hi ", separator: ": ", suffix: ".", fallbackName: " team " };
     const greeting = api.createGreeter(options);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createGreeter, greet, greetMany } from "./index";
+import { createGreeter, greet, greetJoined, greetMany } from "./index";
 
 describe("greet", () => {
   it("greets the world by default", () => {
@@ -61,9 +61,30 @@ describe("greet", () => {
   ])("uses the separator %j without changing it", (separator, expected) => {
     expect(greet("CI", { separator })).toBe(expected);
   });
+
+  it.each([
+    ["@", "Hello, @CI!"],
+    ["", "Hello, CI!"],
+    ["\n", "Hello, \nCI!"],
+  ])("uses the name prefix %j without changing it", (namePrefix, expected) => {
+    expect(greet(" CI ", { namePrefix })).toBe(expected);
+  });
+
+  it("adds the name prefix to the fallback name", () => {
+    expect(greet(undefined, { namePrefix: "@", fallbackName: "team" })).toBe("Hello, @team!");
+  });
 });
 
 describe("createGreeter", () => {
+  it("snapshots the name prefix for named and fallback greetings", () => {
+    const options = { namePrefix: "@", fallbackName: "team" };
+    const greeting = createGreeter(options);
+    options.namePrefix = "#";
+
+    expect(greeting("CI")).toBe("Hello, @CI!");
+    expect(greeting()).toBe("Hello, @team!");
+  });
+
   it("greets with defaults when no options or name are provided", () => {
     const greeting = createGreeter();
 
@@ -102,6 +123,27 @@ describe("createGreeter", () => {
 });
 
 describe("greetMany", () => {
+  it("does not read options for empty batches or their joined output", () => {
+    let reads = 0;
+    const options = {
+      get prefix() {
+        reads++;
+        return "Hi";
+      },
+    };
+
+    expect(greetMany([], options)).toEqual([]);
+    expect(greetJoined([], options)).toBe("");
+    expect(reads).toBe(0);
+  });
+
+  it("shares a name prefix with every position", () => {
+    expect(greetMany([" CI ", " "], { namePrefix: "@", fallbackName: "team" })).toEqual([
+      "Hello, @CI!",
+      "Hello, @team!",
+    ]);
+  });
+
   it("greets names in order without modifying the input list", () => {
     const names = Object.freeze([" microshine ", "CI"]);
 
@@ -161,5 +203,45 @@ describe("greetMany", () => {
     expect(greetMany(names, { fallbackName: "team" })).toEqual(["Hello, team!", "Hello, CI!", "Hello, team!"]);
     expect(names[0]).toBe("inherited");
     expect(Object.keys(names)).toEqual(["1"]);
+  });
+});
+
+describe("greetJoined", () => {
+  it("supports name prefixes when joining greetings", () => {
+    expect(greetJoined(["CI", " "], { namePrefix: "@", fallbackName: "team" }, " / ")).toBe(
+      "Hello, @CI! / Hello, @team!",
+    );
+  });
+
+  it("joins greetings with newlines without changing the input", () => {
+    const names = Object.freeze([" CI ", "world"]);
+
+    expect(greetJoined(names)).toBe("Hello, CI!\nHello, world!");
+    expect(names).toEqual([" CI ", "world"]);
+  });
+
+  it("shares greeting options and accepts a custom joiner", () => {
+    expect(greetJoined(["CI", " "], { prefix: "Hi", separator: ": ", suffix: ".", fallbackName: "team" }, " / ")).toBe(
+      "Hi: CI. / Hi: team.",
+    );
+  });
+
+  it("supports an empty joiner", () => {
+    expect(greetJoined(["CI", "team"], { suffix: "" }, "")).toBe("Hello, CIHello, team");
+  });
+
+  it("returns an empty string for an empty name list", () => {
+    expect(greetJoined([])).toBe("");
+  });
+
+  it("uses fallback greetings for inherited sparse entries", () => {
+    const names: string[] = [];
+    names.length = 2;
+    names[1] = "CI";
+    const prototype = Object.create(Array.prototype);
+    Object.defineProperty(prototype, "0", { value: "inherited" });
+    Object.setPrototypeOf(names, prototype);
+
+    expect(greetJoined(names, { fallbackName: "team" }, " | ")).toBe("Hello, team! | Hello, CI!");
   });
 });
