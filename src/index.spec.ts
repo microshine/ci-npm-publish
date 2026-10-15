@@ -96,4 +96,18 @@ describe("greetMany", () => {
       "Hi: team.",
     ]);
   });
+
+  it("fills missing entries in sparse name lists with fallback greetings", () => {
+    const names: string[] = [];
+    names.length = 3;
+    names[1] = " CI ";
+    Object.freeze(names);
+
+    expect(greetMany(names, { prefix: "Hi", separator: ": ", fallbackName: "team" })).toEqual([
+      "Hi: team!",
+      "Hi: CI!",
+      "Hi: team!",
+    ]);
+    expect(Object.keys(names)).toEqual(["1"]);
+  });
 });

@@ -18,7 +18,7 @@ export function greet(
   return `${prefix.trim() || "Hello"}${separator}${name.trim() || fallbackName.trim() || "world"}${suffix}`;
 }
 
-/** Greet each name in order without modifying the input list. */
+/** Greet every position in order, using the fallback for sparse entries without modifying the input list. */
 export function greetMany(names: readonly string[], options?: GreetingOptions): string[] {
-  return names.map((name) => greet(name, options));
+  return Array.from(names, (name) => greet(name, options));
 }
