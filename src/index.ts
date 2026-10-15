@@ -39,8 +39,10 @@ export function createGreeter(options?: GreetingOptions): (name?: string) => str
   return (name) => formatGreeting(name, normalizedOptions);
 }
 
-/** Greet every position in order, using the fallback for sparse entries without modifying the input list. */
+/** Greet every own array position in order, using the fallback for holes even when an inherited value exists. */
 export function greetMany(names: readonly string[], options?: GreetingOptions): string[] {
   const normalizedOptions = normalizeOptions(options);
-  return Array.from(names, (name) => formatGreeting(name, normalizedOptions));
+  return Array.from({ length: names.length }, (_, index) =>
+    formatGreeting(Object.hasOwn(names, index) ? names[index] : undefined, normalizedOptions),
+  );
 }

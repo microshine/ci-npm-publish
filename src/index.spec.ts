@@ -148,4 +148,18 @@ describe("greetMany", () => {
     ]);
     expect(Object.keys(names)).toEqual(["1"]);
   });
+
+  it("uses fallback greetings for holes that have inherited array values", () => {
+    const names: string[] = [];
+    names.length = 3;
+    names[1] = " CI ";
+    const prototype = Object.create(Array.prototype);
+    Object.defineProperty(prototype, "0", { value: "inherited" });
+    Object.setPrototypeOf(names, prototype);
+    Object.freeze(names);
+
+    expect(greetMany(names, { fallbackName: "team" })).toEqual(["Hello, team!", "Hello, CI!", "Hello, team!"]);
+    expect(names[0]).toBe("inherited");
+    expect(Object.keys(names)).toEqual(["1"]);
+  });
 });
