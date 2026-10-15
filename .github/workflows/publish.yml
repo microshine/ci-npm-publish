@@ -4,8 +4,7 @@ on:
   push:
     branches:
       - main
-    paths:
-      - package.json
+  # Retry publishing from the v<version> release tag after a failed publish.
   workflow_dispatch:
 
 permissions:
@@ -16,65 +15,85 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Check the commit before release-please can create a tag or GitHub Release.
   check:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      release: ${{ steps.version.outputs.release }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Check for unreleased version
-        id: version
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Verify
+        uses: ./.github/actions/verify
 
-          # The GitHub Release is the last step; its absence also permits recovery of a partial publish.
-          STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/tags/v$VERSION")
+  release-please:
+    runs-on: ubuntu-24.04
+    needs: check
 
-          case "$STATUS" in
-            200) echo "release=false" >> "$GITHUB_OUTPUT" ;;
-            404) echo "release=true" >> "$GITHUB_OUTPUT" ;;
-            *) echo "::error::Unexpected HTTP $STATUS while checking release v$VERSION"; exit 1 ;;
-          esac
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      sha: ${{ steps.release.outputs.sha }}
+
+    steps:
+      - name: Release Please
+        id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          # Set RELEASE_TOKEN (PAT or GitHub App token) so Test runs on the release PR.
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+          target-branch: main
 
   publish:
     runs-on: ubuntu-24.04
-    needs: check
-    if: needs.check.outputs.release == 'true'
+    needs: release-please
+    # Manual runs skip check and release-please; explicitly allow their skipped results.
+    if: >-
+      !cancelled() && (
+        github.event_name == 'workflow_dispatch' ||
+        needs.release-please.outputs.release_created == 'true'
+      )
     permissions:
       contents: write
       packages: write
-      pull-requests: read
-    env:
-      VERSION: ${{ needs.check.outputs.version }}
     steps:
+      - name: Verify the release commit
+        env:
+          RELEASE_SHA: ${{ needs.release-please.outputs.sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            if [ "$GITHUB_REF_TYPE" != tag ] || [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Run Publish from a v<version> release tag, not from $GITHUB_REF_NAME"
+              exit 1
+            fi
+          elif [ "$RELEASE_SHA" != "$GITHUB_SHA" ]; then
+            echo "::error::Release commit $RELEASE_SHA differs from $GITHUB_SHA; run Publish manually from the release tag"
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Read the version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::package.json version $VERSION does not match tag $GITHUB_REF_NAME"
+            exit 1
+          fi
+
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: Verify
         id: verify
         uses: ./.github/actions/verify
         with:
           registry-url: https://npm.pkg.github.com
-
-      - name: Read release notes from the merged release pull request
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api -H "Accept: application/vnd.github+json" \
-            "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls?per_page=100" \
-            > "$RUNNER_TEMP/release-prs.json"
-          node .github/scripts/release-notes.mjs extract \
-            "$RUNNER_TEMP/release-prs.json" "$RUNNER_TEMP/release-notes.md"
 
       - name: Publish to GitHub Packages
         env:
@@ -106,35 +125,20 @@ jobs:
             exit 1
           fi
 
-      - name: Push tags
+      # Retrying an older version must not move the major tag backwards.
+      - name: Move major tag
         run: |
-          set +e
-          git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" > /dev/null
-          STATUS=$?
-          set -e
+          MAJOR="v${VERSION%%.*}"
+          LATEST=$(git ls-remote --tags --refs origin "refs/tags/$MAJOR.*" \
+            | sed 's|.*refs/tags/||' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V \
+            | tail -n 1)
 
-          case "$STATUS" in
-            0)
-              git fetch --no-tags origin "refs/tags/v$VERSION:refs/tags/v$VERSION"
-              if [ "$(git rev-parse "v$VERSION^{commit}")" != "$(git rev-parse HEAD)" ]; then
-                echo "::error::Tag v$VERSION points to a different commit"
-                exit 1
-              fi
-              ;;
-            2)
-              git tag "v$VERSION"
-              git push origin "v$VERSION"
-              ;;
-            *)
-              echo "::error::git ls-remote failed with exit code $STATUS"
-              exit 1
-              ;;
-          esac
+          if [ "$LATEST" != "v$VERSION" ]; then
+            echo "Leaving $MAJOR unchanged: v$VERSION is not the latest release ($LATEST)"
+            exit 0
+          fi
 
-          git tag -f "v${VERSION%%.*}" "v$VERSION^{commit}"
-          git push -f origin "v${VERSION%%.*}"
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "v$VERSION" --verify-tag --title "v$VERSION" --notes-file "$RUNNER_TEMP/release-notes.md"
+          git tag -f "$MAJOR" HEAD
+          git push -f origin "$MAJOR"

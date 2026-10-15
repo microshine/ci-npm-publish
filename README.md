@@ -3,9 +3,9 @@
 Небольшой TypeScript-модуль для обкатки ведения и публикации npm-пакета через GitHub Actions.
 Пакет: **`@microshine/ci-npm-publish`**, реестр: **`https://npm.pkg.github.com`** (GitHub Packages).
 
-Процесс основан на CI в `pvtsutils`: общие проверки, PR с новой версией, публикация после слияния,
-теги и GitHub Release. Список изменений из заголовков слитых PR с Angular preset попадает в описание релизного PR;
-после слияния этот текст переносится в GitHub Release. Отдельный файл с историей изменений не ведётся.
+Процесс повторяет переход `pvtsutils` на [release-please в PR #41](https://github.com/PeculiarVentures/pvtsutils/pull/41):
+Conventional Commits → релизный PR → тег и GitHub Release → публикация npm-пакета.
+Версия определяется автоматически, заметки хранятся в GitHub Releases; `CHANGELOG.md` не создаётся.
 Для публикации используется встроенный `GITHUB_TOKEN` с правом `packages: write`.
 
 ## Модуль
@@ -60,21 +60,61 @@ npm run package:check -- /absolute/path/from-pack-output.tgz
 Проверка создаёт временный проект-потребитель, устанавливает архив и запускает тесты через `node:test`.
 
 `npm run format` и `npm run lint:fix` исправляют оформление и замечания линтера.
-`src/index.spec.ts` содержит тесты модуля, `.github/scripts/pr-release-notes.spec.mjs` — тесты генерации
-из заголовков PR, `.github/scripts/release-notes.spec.mjs` — тесты подготовки и переноса release notes.
+`src/index.spec.ts` содержит тесты модуля, `.github/fixtures/package-consumer.test.mjs` — проверки установленного пакета.
 `build/` и `coverage/` генерируются и не коммитятся.
 Сборка через tsdown проверяет типы/экспорты пакета с помощью Are the Types Wrong.
 Если сборка обновила поля экспортов в `package.json`, включи их в коммит: CI проверяет отсутствие таких изменений.
 
 ## CI и релизы
 
-| Workflow         | Когда запускается                                       | Что делает                                                                        |
-| ---------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| **Test**         | PR и push в `main`                                      | Lint, типы, одна сборка, unit-тесты, упаковка и проверки установленного `.tgz`    |
-| **Version Bump** | Вручную из Actions, ветка `main`                        | `patch` / `minor` / `major`, PR `release/version-bump` с release notes в описании |
-| **Publish**      | Изменение `package.json` в `main` или вручную на `main` | Проверки, GitHub Packages, тег `vX.Y.Z`, обновление тега `vX`, GitHub Release     |
+| Workflow    | Когда запускается                                 | Что делает                                                                                                                                   |
+| ----------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Test**    | PR и push в `main`                                | Lint, форматирование, типы, сборка, тесты с coverage, упаковка и проверки установленного `.tgz`                                              |
+| **Publish** | Каждый push в `main` или вручную из тега `vX.Y.Z` | release-please готовит PR или создаёт релиз; после создания релиза выполняются проверки, публикация в GitHub Packages и обновление тега `vX` |
 
-Проверки вынесены в `.github/actions/verify`. Coveralls и npm Trusted Publisher для этого стенда не нужны.
+В **Publish** три job: `check` → `release-please` → `publish`. Сначала `check` проверяет коммит,
+поэтому код с ошибками не получает релизный тег или GitHub Release. После создания релиза запускается публикация.
+При ручном запуске из релизного тега первые две job пропускаются, а `publish` повторяет проверки и публикацию.
+Общие проверки вынесены в `.github/actions/verify`.
+
+### Как выпускается новая версия
+
+1. Отправь изменение через PR с Conventional Commit в заголовке, например `feat: add a greeting option`.
+   Для предсказуемых release notes используй squash merge: заголовок PR станет сообщением коммита в `main`.
+2. После слияния **Publish** запускает release-please, который открывает или обновляет один
+   PR `chore(release): vX.Y.Z`. В PR меняются `package.json`, `package-lock.json`
+   и `.release-please-manifest.json`; заметки находятся в описании PR.
+3. Проверь версию и заметки, дождись **Test** и слей релизный PR в `main`.
+4. После успешной `check` release-please создаст тег `vX.Y.Z` и GitHub Release. Job `publish` сверит SHA
+   релиза с `GITHUB_SHA`, повторно проверит этот коммит, опубликует проверенный архив в GitHub Packages
+   и переместит тег `vX`, если выпускаемая версия — последняя в своей major-ветке.
+5. Проверь **Actions → Publish**, новую версию в **Packages**, теги и
+   [GitHub Release](https://github.com/microshine/ci-npm-publish/releases).
+
+Конфигурация в `release-please-config.json` повторяет PR #41: стратегия `node`, теги `vX.Y.Z`
+без имени компонента, `skip-changelog: true` и те же разделы заметок.
+Ветка стенда — `main`, пакет — `@microshine/ci-npm-publish`, реестр — GitHub Packages.
+Начальная версия в manifest — `0.2.2`, как в `package.json`; следующую версию рассчитывает release-please.
+
+| Коммит в `main`                                       | Повышение версии                 | Раздел release notes                   |
+| ----------------------------------------------------- | -------------------------------- | -------------------------------------- |
+| `feat: ...`                                           | minor                            | Features                               |
+| `fix: ...`                                            | patch                            | Bug Fixes                              |
+| `perf: ...`                                           | patch                            | Performance Improvements               |
+| `build: ...`                                          | patch                            | Build System                           |
+| `revert: ...`                                         | patch                            | Reverts                                |
+| `feat!: ...` или footer `BREAKING CHANGE: ...`        | major                            | BREAKING CHANGES и раздел типа коммита |
+| `ci:`, `docs:`, `chore:`, `test:` без breaking change | Самостоятельно не вызывают релиз | Не включаются                          |
+
+Для явного выбора версии добавь `Release-As: x.y.z` в тело коммита, который попадёт в `main`.
+release-please читает сообщения коммитов; при обычном merge или rebase отдельные коммиты также должны
+следовать Conventional Commits. Заголовок PR сам по себе при таком слиянии не заменяет сообщения коммитов.
+
+release-please обновляет описание релизного PR при новых изменениях, поэтому ручные правки могут быть перезаписаны.
+Чтобы исправить заметку для уже слитого изменения, добавь в описание исходного PR блок
+`BEGIN_COMMIT_OVERRIDE` … `END_COMMIT_OVERRIDE` с исправленным сообщением Conventional Commit.
+Метки `autorelease: pending` / `autorelease: tagged` управляются release-please; если процесс застрял,
+проверь незавершённые релизные PR и их метки.
 
 ### Проверка пакета на заявленных версиях Node
 
@@ -85,154 +125,60 @@ npm run package:check -- /absolute/path/from-pack-output.tgz
 - **25** — последняя версия ветки 25;
 - **26** — последняя версия ветки 26.
 
-На каждом запуске Test или Publish сборка и упаковка выполняются один раз. Во всех проверках используется
-один и тот же `.tgz`; его SHA-512 сверяется перед каждой установкой. Для каждой версии Node создаётся новый
-временный проект, в который устанавливается только пакет из архива с `--engine-strict` и без devDependencies
-репозитория. Проверяется загрузка через ESM `import` и CommonJS `require`, поведение `greet` / `greetMany`,
-версия пакета, `engines` и наличие деклараций TypeScript.
+В каждой job с `verify` сборка и упаковка выполняются один раз. Во всех проверках этой job используется один `.tgz`;
+его SHA-512 сверяется перед каждой установкой. Для каждой версии Node создаётся временный проект,
+в который устанавливается архив с `--engine-strict` без devDependencies репозитория. Проверяются
+ESM `import`, CommonJS `require`, функции модуля, версия, `engines` и декларации TypeScript.
 
-После проверок восстанавливается Node 24. Publish дополнительно сверяет SHA-512 и передаёт проверенный архив
-в `npm publish <tarball> --ignore-scripts`; повторной сборки или упаковки перед публикацией нет.
-Ошибки совместимости блокируют публикацию. Версии задаются в `.github/actions/verify/action.yml`:
-при изменении `engines` или появлении новой major-версии Node обновляй этот список.
+После проверок восстанавливается Node 24. Publish дополнительно сверяет SHA-512 и передаёт архив
+в `npm publish <tarball> --ignore-scripts --registry=https://npm.pkg.github.com`.
+Ошибки проверок блокируют публикацию. Версии Node задаются в `.github/actions/verify/action.yml`.
 
 ### Настройка GitHub один раз
 
 1. В **Settings → Actions → General** разреши GitHub Actions и используемые actions.
-2. В **Workflow permissions** включи **Allow GitHub Actions to create and approve pull requests**, чтобы
-   Version Bump мог открывать PR. Права токена для каждого workflow уже указаны в YAML.
-3. По желанию добавь repository secret **`RELEASE_TOKEN`** — PAT или токен GitHub App с правами
-   на содержимое репозитория и PR. Он нужен только для автоматического запуска CI на PR, созданном ботом.
-   При использовании встроенного `GITHUB_TOKEN` GitHub может потребовать **Approve workflows to run** на таком PR.
+2. В **Workflow permissions** включи **Allow GitHub Actions to create and approve pull requests**.
+   Права `contents: write`, `issues: write` и `pull-requests: write` для release-please уже указаны в YAML.
+3. Для автоматического запуска **Test** на релизном PR добавь repository secret **`RELEASE_TOKEN`** —
+   PAT или токен GitHub App с доступом к содержимому, issues и PR этого репозитория.
+   Без него release-please использует `GITHUB_TOKEN`, а созданный или обновлённый ботом PR не запускает **Test** автоматически.
+4. Для публикации используется `GITHUB_TOKEN` с `packages: write`. Если пакет уже существует и не наследует
+   доступ репозитория, предоставь этому репозиторию доступ в **Package settings → Manage Actions access**.
 
-`NPM_TOKEN`, OIDC и отдельный environment для публикации не требуются. Registry закреплён и в
-`publishConfig`, и в `.npmrc`; scope совпадает с владельцем репозитория (`microshine`).
+`NPM_TOKEN`, OIDC и отдельный environment для публикации не требуются. Registry закреплён в
+`publishConfig` и `.npmrc`; scope совпадает с владельцем репозитория (`microshine`).
+Связь пакета с репозиторием задаётся полем `repository` в `package.json`.
 
-### История релизов
+### Повтор неудачной публикации
 
-История изменений хранится в [GitHub Releases](https://github.com/microshine/ci-npm-publish/releases).
-Релизы `v0.1.0` и `v0.2.0` уже опубликованы. Новые версии выпускаются через **Version Bump** и слияние релизного PR.
-
-Пакет доступен в разделе **Packages**. По умолчанию новый пакет имеет private visibility;
-при необходимости измени её в настройках пакета. Связь с этим репозиторием задаётся полем `repository` в `package.json`.
-
-### Следующие релизы
-
-1. Измени `greet`, добавь тест и отправь PR, например с заголовком `feat: add a greeting option`.
-2. Дождись **Test** и слей PR в `main`.
-3. Запусти **Actions → Version Bump → Run workflow**, выбери `main` и тип повышения версии.
-4. Проверь созданный PR: версии в `package.json` / `package-lock.json` и раздел **Release notes** в описании PR.
-   При необходимости отредактируй заметки, дождись **Test** и слей PR в `main`.
-5. **Publish** повторно проверит код, опубликует новую версию в GitHub Packages и перенесёт проверенные заметки
-   из описания слитого PR в GitHub Release.
-
-Release notes формируются **из заголовков слитых PR**. В них попадают PR в `main`, чей merge-коммит,
-squash-коммит или последний коммит после rebase находится между предыдущим тегом `vX.Y.Z` и текущим `HEAD`.
-До первого тега рассматривается вся история; перемещаемый тег `vX` не используется.
-Заголовки обрабатываются тем же Angular preset, который раньше использовался для коммитов:
-
-| Пример заголовка PR                         | Раздел release notes                      |
-| ------------------------------------------- | ----------------------------------------- |
-| `feat: add a greeting option`               | Features                                  |
-| `fix(parser): handle blank names`           | Bug Fixes, с указанием scope `parser`     |
-| `perf: cache greetings`                     | Performance Improvements                  |
-| `revert: remove a greeting option`          | Reverts                                   |
-| `feat(api)!: change the greeting signature` | Features и BREAKING CHANGES               |
-| `ci!: require Node.js 24`                   | Continuous Integration и BREAKING CHANGES |
-| `ci:`, `docs:`, `chore:` без `!`            | Не включаются                             |
-
-Каждая запись содержит ссылку на PR. Неслитые PR, PR в другие ветки, уже выпущенные изменения и коммиты
-без PR не включаются. Тело PR не используется: несовместимое изменение отметь `!` перед двоеточием в заголовке.
-Если все PR отфильтрованы или PR нет, добавь описание вручную в раздел **Release notes** релизного PR:
-публикация останавливается при пустых заметках. Тип повышения версии выбирается вручную.
-
-Для локальной генерации нужны полная история с тегами, [GitHub CLI](https://cli.github.com/) и авторизация
-через `gh auth login` или `GH_TOKEN` с правом чтения PR:
+Если `check` упала, release-please не создаёт релиз. Если упала `publish`, тег и GitHub Release уже существуют:
+используй **Re-run failed jobs** либо запусти **Publish** вручную из точного релизного тега.
+Ручной запуск из `main` или другой ветки отклоняется. Через GitHub CLI:
 
 ```bash
-git fetch --tags
-npm version patch --no-git-tag-version
-npm run --silent changelog
+gh workflow run publish.yml --ref vX.Y.Z
 ```
 
-Команда выводит release notes в stdout. Репозиторий берётся из `GITHUB_REPOSITORY` или поля `repository.url`
-в `package.json`; ветка по умолчанию — `main` (можно задать `RELEASE_BASE_BRANCH`).
-Генератор завершится с ошибкой, если версия уже имеет тег: сначала повысь версию пакета.
+Вместо `vX.Y.Z` укажи существующий тег. В ручном запуске версия из `package.json` должна совпадать с тегом;
+в автоматическом SHA от release-please должен совпадать с `GITHUB_SHA`.
+Сборка использует коммит события без переключения на другой коммит.
 
-Заметки находятся между скрытыми HTML-маркерами в описании PR. При редактировании сохраняй эти строки:
+Уже опубликованная версия пропускается. Только ответ `E404` от реестра разрешает новую публикацию;
+ошибки авторизации или сети останавливают job. Повтор старой версии не откатывает тег `vX`:
+он обновляется только для последнего стабильного тега этой major-ветки.
+Наличие GitHub Release само по себе не означает, что npm-пакет уже опубликован.
 
-```markdown
-<!-- release-notes:v0.3.0 -->
+### Сценарий обкатки
 
-### Features
-
-- Описание изменений, которое попадёт в GitHub Release.
-
-<!-- /release-notes -->
-```
-
-Версия в начальном маркере должна совпадать с версией пакета. Publish копирует только текст между маркерами,
-без служебных инструкций PR, и не генерирует заметки заново. При отсутствующих или повторяющихся маркерах
-либо пустом тексте публикация останавливается до отправки пакета. Повторный запуск Version Bump обновляет описание PR;
-ручные правки заметок вноси после последнего запуска.
-
-При сбое повтори неуспешный запуск через **Re-run failed jobs**. Публикация пропускает уже существующую
-версию пакета и завершает создание тегов/Release. При существующем GitHub Release весь релиз пропускается.
-Publish получает релизный PR по коммиту его слияния и ожидает ветку `release/version-bump` с базой `main`.
-Для восстановления частичного релиза используй исходный запуск: он сохраняет нужный коммит и связь с PR.
-Ручной **Publish → Run workflow → main** подходит, пока `main` указывает на коммит слияния релизного PR;
-если после него появились другие коммиты, повтори исходный запуск Publish.
-Уже опубликованные версии не меняются; для следующего эксперимента повышай версию.
-
-### Сценарий обкатки с несколькими коммитами
-
-1. Создай PR с несколькими коммитами и заголовком `feat: add a greeting option`.
-   На PR запускается **Test**; **Publish** запускается после изменения версии в `main`.
-2. Слей PR через merge, squash или rebase. Во всех случаях источником заметки служит заголовок PR.
-   Для проверки фильтрации отдельно слей PR с заголовком `docs: update greeting examples`.
-3. Запусти **Version Bump** с `minor` для новых функций или с `patch` для исправлений.
-   В описании релизного PR проверь release notes: PR с `feat:` должен попасть в них одной записью со ссылкой,
-   PR с `docs:` — нет.
-4. После слияния релизного PR проверь новую версию в **Packages**, теги и GitHub Release.
-   Если используется `GITHUB_TOKEN`, подтверди запуск CI на созданном ботом релизном PR, когда GitHub попросит.
-
-Описание API выше относится к текущему исходному коду. После слияния функциональных изменений нужен отдельный
-Version Bump и релиз, чтобы новые функции появились в устанавливаемом пакете.
-
-### Стек PR для проверки release notes и публикации
-
-| Порядок | PR                                                                                                                       | Ожидаемый раздел release notes |
-| ------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
-| 1       | [#9 — feat(greetings): support custom greeting separators](https://github.com/microshine/ci-npm-publish/pull/9)          | Features                       |
-| 2       | [#10 — fix(greetings): greet missing entries in sparse name lists](https://github.com/microshine/ci-npm-publish/pull/10) | Bug Fixes                      |
-| 3       | [#11 — perf(greetings): normalize options once per greeting batch](https://github.com/microshine/ci-npm-publish/pull/11) | Performance Improvements       |
-| 4       | `docs(greetings): document the stacked release trial` — этот документ                                                    | Отфильтрован                   |
-
-1. Дождись **Test** и слей #9 в `main`. Затем последовательно меняй base следующего PR на `main`,
-   проверяй diff и CI и сливай его. Каждый из четырёх PR должен быть слит непосредственно в `main`:
-   генератор отбирает PR по базовой ветке.
-2. Запусти **Version Bump** на `main` с `minor`. В релизном PR проверь по одной записи со ссылками на #9, #10
-   и #11 в трёх соответствующих разделах. `docs(greetings)` должен отсутствовать; отдельные коммиты этих PR
-   не должны создавать дополнительные записи. Возможны записи других PR, слитых после предыдущего тега.
-3. Проверь версию пакета и release notes между HTML-маркерами, дождись **Test** и слей релизный PR.
-   После завершения **Publish** проверь новую версию в **Packages**, теги `vX.Y.Z` / `vX` и текст GitHub Release.
-4. Установи выпущенную версию в отдельный проект-потребитель с доступом к GitHub Packages и выполни:
-
-```js
-import assert from "node:assert/strict";
-import { greet, greetMany } from "@microshine/ci-npm-publish";
-
-assert.equal(greet("CI", { prefix: "Hi", separator: ": " }), "Hi: CI!");
-assert.equal(greet("CI", { separator: "" }), "HelloCI!");
-const names = [];
-names.length = 3;
-names[1] = "CI";
-assert.deepEqual(greetMany(Object.freeze(names), { separator: ": ", fallbackName: "team" }), [
-  "Hello: team!",
-  "Hello: CI!",
-  "Hello: team!",
-]);
-```
+1. Слей PR с `feat:`, затем PR с `fix:` и PR с `docs:` через squash merge.
+2. Проверь, что release-please обновляет один релизный PR: `feat` даёт minor,
+   `feat` и `fix` попадают в заметки, `docs` не появляется.
+3. Слей релизный PR и проверь успешные **Test** / **Publish**, GitHub Release, точный тег `vX.Y.Z`,
+   перемещаемый тег `vX` и опубликованную версию в GitHub Packages.
+4. Повтори **Publish** вручную из тега выпущенной версии: существующий пакет должен быть пропущен.
+   Запуск из `main` должен завершиться понятной ошибкой. После следующего релиза повтори старый тег:
+   перемещаемый тег `vX` должен остаться на новой версии.
+5. Установи выпущенную версию в отдельный проект-потребитель по инструкции ниже и проверь API.
 
 ## Установка из GitHub Packages
 
