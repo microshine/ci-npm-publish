@@ -123,6 +123,20 @@ describe("createGreeter", () => {
 });
 
 describe("greetMany", () => {
+  it("does not read options for empty batches or their joined output", () => {
+    let reads = 0;
+    const options = {
+      get prefix() {
+        reads++;
+        return "Hi";
+      },
+    };
+
+    expect(greetMany([], options)).toEqual([]);
+    expect(greetJoined([], options)).toBe("");
+    expect(reads).toBe(0);
+  });
+
   it("shares a name prefix with every position", () => {
     expect(greetMany([" CI ", " "], { namePrefix: "@", fallbackName: "team" })).toEqual([
       "Hello, @CI!",

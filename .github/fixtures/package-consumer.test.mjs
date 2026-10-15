@@ -32,6 +32,16 @@ for (const [format, api] of [
   ["ESM import", esm],
   ["CommonJS require", commonjs],
 ]) {
+  test(`${format}: empty batches and joined output do not access greeting options`, () => {
+    const options = {
+      get prefix() {
+        throw new Error("Empty input must not read greeting options");
+      },
+    };
+    assert.deepEqual(api.greetMany([], options), []);
+    assert.equal(api.greetJoined([], options), "");
+  });
+
   test(`${format}: name prefixes work across single, batch, joined, and reusable greetings`, () => {
     const options = { namePrefix: "@", fallbackName: "team" };
     const greeting = api.createGreeter(options);

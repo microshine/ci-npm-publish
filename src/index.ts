@@ -49,6 +49,7 @@ export function createGreeter(options?: GreetingOptions): (name?: string) => str
 
 /** Greet every own array position in order, using the fallback for holes even when an inherited value exists. */
 export function greetMany(names: readonly string[], options?: GreetingOptions): string[] {
+  if (names.length === 0) return [];
   const normalizedOptions = normalizeOptions(options);
   return Array.from({ length: names.length }, (_, index) =>
     formatGreeting(Object.hasOwn(names, index) ? names[index] : undefined, normalizedOptions),
